@@ -5,6 +5,7 @@ from typing import Optional, Dict
 
 from datasets import load_dataset
 from torchvision import transforms
+from huggingface_hub.hf_api import HfFolder
 
 from nemo.core import Dataset, typecheck
 from nemo.core.neural_types import NeuralType
@@ -17,7 +18,7 @@ transform = Compose(
 
 # define function
 def transforms(examples):
-    examples["pixel_values"] = [transform(image.convert("L")) for image in examples["image"]]
+    examples["pixel_values"] = [transform(image) for image in examples["image"]]
     del examples["image"]
 
     return examples
@@ -52,7 +53,8 @@ class HFVisionDataset(Dataset):
     def __init__(self, name: str, split: str):
         super().__init__()
 
-        dataset = load_dataset(name, split=split)
+        has_auth_token = HfFolder.get_token() is not None
+        dataset = load_dataset(name, split=split, use_auth_token=has_auth_token)
         self.dataset = dataset.with_transform(transforms).remove_columns("label")
 
     @property

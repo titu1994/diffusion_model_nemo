@@ -6,6 +6,8 @@ from abc import ABC, abstractmethod
 from omegaconf import OmegaConf, DictConfig
 from typing import Optional, List
 
+from diffusion_model_nemo import utils
+
 
 def cosine_beta_schedule(timesteps, s=0.008, min_clip=0.0001, max_clip=0.999):
     """
@@ -61,6 +63,10 @@ class AbstractDiffusionProcess:
     @abstractmethod
     @torch.no_grad()
     def sample(self, model: torch.nn.Module, shape: List[int]):
+        raise NotImplementedError()
+
+    @torch.no_grad()
+    def interpolate(self, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.0):
         raise NotImplementedError()
 
 
@@ -212,3 +218,20 @@ class GaussianDiffusion(AbstractDiffusionProcess):
     @torch.no_grad()
     def sample(self, model: torch.nn.Module, shape):
         return self.p_sample_loop(model, shape=shape)
+
+    @torch.no_grad()
+    def interpolate(self, model, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.0):
+        B = x1.size(0)
+        device = x1.device
+        t = utils.default(t, self.timesteps - 1)
+
+        assert x1.shape == x2.shape
+
+        t_batched = torch.stack([torch.tensor(t, device=device)] * B)
+        xt1, xt2 = map(lambda x: self.q_sample(x, t=t_batched), (x1, x2))
+
+        img = (1 - lambd) * xt1 + lambd * xt2
+        for i in tqdm(reversed(range(0, t)), desc='Interpolation sample time step', total=t):
+            img = self.p_sample(model, img, torch.full((B,), i, device=device, dtype=torch.long))
+
+        return img

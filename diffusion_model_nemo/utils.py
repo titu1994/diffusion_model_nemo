@@ -15,6 +15,15 @@ def default(val, d):
     return d() if isfunction(d) else d
 
 
+def num_to_groups(num, divisor):
+    groups = num // divisor
+    remainder = num % divisor
+    arr = [divisor] * groups
+    if remainder > 0:
+        arr.append(remainder)
+    return arr
+
+
 class Residual(nn.Module):
     def __init__(self, fn):
         super().__init__()

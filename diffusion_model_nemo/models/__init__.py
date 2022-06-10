@@ -1,1 +1,2 @@
+from diffusion_model_nemo.models.abstract_diffusion_model import AbstractDiffusionModel
 from diffusion_model_nemo.models.ddpm import DDPM

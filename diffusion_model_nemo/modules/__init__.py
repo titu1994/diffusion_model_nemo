@@ -4,5 +4,6 @@ from diffusion_model_nemo.modules.diffusion_process import (
     quadratic_beta_schedule,
     cosine_beta_schedule,
     sigmoid_beta_schedule,
+    AbstractDiffusionProcess,
     GaussianDiffusion,
 )
