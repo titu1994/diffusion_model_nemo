@@ -4,6 +4,7 @@ from dataclasses import dataclass, is_dataclass
 from typing import Optional
 import datetime
 from pathlib import Path
+from pytorch_lightning import seed_everything
 
 from diffusion_model_nemo.models import DDPM
 from nemo.core.config import hydra_runner
@@ -27,6 +28,8 @@ class EvalConfig:
     add_timestamp: bool = True
     show_diffusion: bool = False
 
+    seed: Optional[int] = None
+
 
 @hydra_runner(config_path=None, config_name="EvalConfig", schema=EvalConfig)
 def main(cfg: EvalConfig):
@@ -40,6 +43,11 @@ def main(cfg: EvalConfig):
     if cfg.image_size < 0:
         cfg.image_size = model.image_size
 
+    # Seed everything if provided
+    if cfg.seed is not None:
+        seed_everything(cfg.seed)
+
+    # Compute samples
     samples = model.sample(batch_size=cfg.batch_size, image_size=cfg.image_size)
 
     results_dir = cfg.get('output_dir')

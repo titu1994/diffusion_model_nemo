@@ -6,6 +6,7 @@ from dataclasses import dataclass, is_dataclass
 from typing import Optional
 import datetime
 from pathlib import Path
+from pytorch_lightning import seed_everything
 
 from diffusion_model_nemo.models import DDPM
 from diffusion_model_nemo.data.hf_vision_data import get_transform
@@ -38,6 +39,7 @@ class InterpolateConfig:
 
     output_dir: str = "interpolations"
     add_timestamp: bool = True
+    seed: Optional[int] = None
 
 
 def read_image_dir(path: str, channels: int, cfg: InterpolateConfig):
@@ -83,6 +85,11 @@ def main(cfg: InterpolateConfig):
                          f"Found {len(x1_images)} images in dir : {cfg.dir_1} and "
                          f"Found {len(x2_images)} images in dir : {cfg.dir_2}")
 
+    # Seed everything if provided
+    if cfg.seed is not None:
+        seed_everything(cfg.seed)
+
+    # Compute the interpolation
     samples = model.interpolate(x1=x1_images, x2=x2_images, t=cfg.timesteps, lambd=cfg.lambd)
 
     results_dir = cfg.get('output_dir')
@@ -95,11 +102,11 @@ def main(cfg: InterpolateConfig):
     results_folder.mkdir(exist_ok=True, parents=True)
 
     for result_idx in range(len(x1_images)):
-        result_path = str(results_folder / f"interpolation_{result_idx + 1}.png")
+        result_path = str(results_folder / f"interpolation_{result_idx + 1}_lambda_{cfg.lambd}.png")
 
         sample_ = [samples[t_][result_idx] for t_ in range(cfg.timesteps)]
         result = torch.stack(sample_, dim=0)
-        torchvision.utils.save_image(result, result_path, nrows=max(32, (cfg.timestamp + 1) // 32))
+        torchvision.utils.save_image(result, result_path, nrows=max(32, (cfg.timesteps + 1) // 16))
 
 
 if __name__ == '__main__':
