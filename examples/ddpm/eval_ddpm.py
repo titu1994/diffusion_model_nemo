@@ -25,7 +25,7 @@ class EvalConfig:
 
     output_dir: str = "samples"
     add_timestamp: bool = True
-    show_diffusion: bool = True
+    show_diffusion: bool = False
 
 
 @hydra_runner(config_path=None, config_name="EvalConfig", schema=EvalConfig)

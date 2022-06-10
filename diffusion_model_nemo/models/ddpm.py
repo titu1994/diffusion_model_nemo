@@ -10,7 +10,7 @@ from omegaconf import OmegaConf, DictConfig, open_dict
 from hydra.utils import instantiate
 
 from diffusion_model_nemo.data.hf_vision_data import HFVisionDataset
-from diffusion_model_nemo.modules.schedules import AbstractSampler
+from diffusion_model_nemo.modules.diffusion_process import AbstractSampler
 
 from nemo.core import ModelPT, PretrainedModelInfo, typecheck
 from nemo.core.neural_types import NeuralType

@@ -6,7 +6,7 @@ from typing import Optional, Dict
 from nemo.core import Loss, typecheck
 from nemo.core.neural_types import NeuralType, LossType
 
-from diffusion_model_nemo.modules import schedules
+from diffusion_model_nemo.modules import diffusion_process
 
 
 class DiffusionLoss(Loss):
