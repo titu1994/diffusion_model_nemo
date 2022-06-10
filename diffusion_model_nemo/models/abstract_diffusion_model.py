@@ -65,7 +65,7 @@ class AbstractDiffusionModel(ModelPT):
     def sample(self, batch_size: int, image_size: int):
         raise NotImplementedError()
 
-    def interpolate(self):
+    def interpolate(self, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.5, **kwargs):
         raise NotImplementedError()
 
     def setup_training_data(self, train_data_config: Union[DictConfig, Dict]):

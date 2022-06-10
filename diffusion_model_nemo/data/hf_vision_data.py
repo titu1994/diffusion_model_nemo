@@ -15,6 +15,8 @@ transform = Compose(
     [transforms.RandomHorizontalFlip(), transforms.ToTensor(), transforms.Lambda(lambda t: (t * 2) - 1)]
 )
 
+infer_transform = Compose([transforms.ToTensor(), transforms.Lambda(lambda t: (t * 2) - 1)])
+
 
 # define function
 def transforms(examples):
@@ -24,28 +26,44 @@ def transforms(examples):
     return examples
 
 
-def get_transform(image_size: int):
-    transform = Compose(
-        [
-            Resize(image_size),
-            CenterCrop(image_size),
-            ToTensor(),  # turn into Numpy array of shape HWC, divide by 255
-            Lambda(lambda t: (t * 2) - 1),
-        ]
-    )
+def get_transform(image_size: int, scale: bool = True, center_crop: bool = False):
+    transfm = [
+        Resize(image_size),
+    ]
+
+    if center_crop:
+        transfm.append(CenterCrop(image_size))
+
+    # turn into Numpy array of shape HWC, divide by 255
+    transfm.append(ToTensor())
+
+    if scale:
+        transfm.append(Lambda(lambda t: (t * 2) - 1))
+
+    transform = Compose(transfm)
     return transform
 
 
-def get_reverse_transform():
-    reverse_transform = Compose(
+def get_reverse_transform(inverse_scale=True, uint=False):
+    transfm = []
+
+    if inverse_scale:
+        transfm.append(Lambda(lambda t: (t + 1) / 2))
+
+    transfm.extend(
         [
-            Lambda(lambda t: (t + 1) / 2),
             Lambda(lambda t: t.permute(1, 2, 0)),  # CHW to HWC
             Lambda(lambda t: t * 255.0),
-            Lambda(lambda t: t.numpy().astype(np.uint8)),
-            ToPILImage(),
+            Lambda(lambda t: t.numpy()),
         ]
     )
+
+    if uint:
+        transfm.append(Lambda(lambda t: t.astype(np.uint8)))
+
+    transfm.append(ToPILImage())
+
+    reverse_transform = Compose(transfm)
     return reverse_transform
 
 

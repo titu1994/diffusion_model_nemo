@@ -66,7 +66,7 @@ class AbstractDiffusionProcess:
         raise NotImplementedError()
 
     @torch.no_grad()
-    def interpolate(self, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.0):
+    def interpolate(self, model, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.0):
         raise NotImplementedError()
 
 
@@ -156,7 +156,7 @@ class GaussianDiffusion(AbstractDiffusionProcess):
 
     @torch.no_grad()
     def predict_start_from_noise(self, x: torch.Tensor, t: torch.Tensor, noise: torch.Tensor):
-        assert x.shape == noise.shape
+        assert x.shape == noise.shape, f"{x.shape} != {noise.shape}"
         sqrt_recip_alphas_cumprod = self.extract(self.sqrt_recip_alphas_cumprod, t, x.shape)
         sqrt_recipm1_alphas_cumprod = self.extract(self.sqrt_recipm1_alphas_cumprod, t, x.shape)
 
@@ -220,18 +220,26 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         return self.p_sample_loop(model, shape=shape)
 
     @torch.no_grad()
-    def interpolate(self, model, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.0):
+    def interpolate(self, model, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.5):
         B = x1.size(0)
         device = x1.device
         t = utils.default(t, self.timesteps - 1)
+
+        if t >= self.timesteps:
+            raise ValueError(f"`t` must be < {self.timesteps} during interpolation")
 
         assert x1.shape == x2.shape
 
         t_batched = torch.stack([torch.tensor(t, device=device)] * B)
         xt1, xt2 = map(lambda x: self.q_sample(x, t=t_batched), (x1, x2))
 
+        imgs = []
+
         img = (1 - lambd) * xt1 + lambd * xt2
         for i in tqdm(reversed(range(0, t)), desc='Interpolation sample time step', total=t):
             img = self.p_sample(model, img, torch.full((B,), i, device=device, dtype=torch.long))
+            # unnormalize image
+            img_cpu = (img.cpu() + 1) * 0.5
+            imgs.append(img_cpu)
 
-        return img
+        return imgs
