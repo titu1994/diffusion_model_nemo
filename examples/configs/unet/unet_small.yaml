@@ -36,6 +36,17 @@ model:
     schedule_cfg:
       cosine:
         s: 0.008
+        min_clip: 0.0001
+        max_clip: 0.9999
+      linear:
+        beta_start: 0.0001
+        beta_end: 0.02
+      quadratic:
+        beta_start: 0.0001
+        beta_end: 0.02
+      sigmoid:
+        beta_start: 0.0001
+        beta_end: 0.02
 
   loss:
     _target_: diffusion_model_nemo.loss.DiffusionLoss

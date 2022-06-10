@@ -140,7 +140,6 @@ class DDPM(ModelPT):
             )
         )
         for idx, image_list in enumerate(all_images_list):
-            logging.info(f"Image list {len(image_list)} {image_list[0].shape}")
             all_images = torch.cat(image_list, dim=0)
             all_images = (all_images + 1) * 0.5
             save_path = str(self._result_dir / f'sample-{milestone}-{idx + 1}.png')

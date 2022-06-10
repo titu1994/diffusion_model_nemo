@@ -7,16 +7,17 @@ from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
 
 """
+# Train script
 
 python train_ddpm.py ^
-    --config-path="configs/unet" ^
+    --config-path="../configs/unet" ^
     --config-name="unet_small.yaml" ^
     model.image_size=28 ^
     model.timesteps=200 ^
     model.channels=1 ^
-    model.save_every=1000 ^
+    model.save_every=500 ^
     model.diffusion_model.resnet_block_groups=8 ^
-    model.diffusion_model.dim_mults=[1,4,8] ^
+    model.diffusion_model.dim_mults=[1,2,4] ^
     model.train_ds.name="fashion_mnist" ^
     model.train_ds.split="train" ^
     trainer.max_epochs=5 ^
@@ -32,7 +33,7 @@ python train_ddpm.py ^
 """
 
 
-@hydra_runner(config_path="configs/unet", config_name="unet_small.yaml")
+@hydra_runner(config_path="../configs/unet", config_name="unet_small.yaml")
 def main(cfg):
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
 

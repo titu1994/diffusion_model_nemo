@@ -1,4 +1,3 @@
-import pytorch_lightning as pl
 import torchvision.utils
 from omegaconf import OmegaConf, open_dict
 from dataclasses import dataclass, is_dataclass
@@ -9,30 +8,11 @@ from pathlib import Path
 from diffusion_model_nemo.models import DDPM
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
-from nemo.utils.exp_manager import exp_manager
 
 """
 
-python train_ddpm.py ^
-    --config-path="configs/unet" ^
-    --config-name="unet_small.yaml" ^
-    model.image_size=28 ^
-    model.timesteps=200 ^
-    model.channels=1 ^
-    model.save_every=400 ^
-    model.diffusion_model.resnet_block_groups=8 ^
-    model.diffusion_model.dim_mults=[1,2,4] ^
-    model.train_ds.name="fashion_mnist" ^
-    model.train_ds.split="train" ^
-    trainer.max_epochs=3 ^
-    trainer.strategy=null ^
-    exp_manager.name="DDPM" ^
-    exp_manager.exp_dir="Experiments" ^
-    exp_manager.create_wandb_logger=True ^
-    exp_manager.wandb_logger_kwargs.name="DDPM" ^
-    exp_manager.wandb_logger_kwargs.project="DDPM" ^
-    exp_manager.wandb_logger_kwargs.entity="smajumdar"
-
+python eval_ddpm.py ^
+    
 
 """
 
@@ -45,6 +25,7 @@ class EvalConfig:
 
     output_dir: str = "samples"
     add_timestamp: bool = True
+    show_diffusion: bool = True
 
 
 @hydra_runner(config_path=None, config_name="EvalConfig", schema=EvalConfig)
@@ -61,10 +42,6 @@ def main(cfg: EvalConfig):
 
     samples = model.sample(batch_size=cfg.batch_size, image_size=cfg.image_size)
 
-    # import matplotlib.pyplot as plt
-    # plt.imshow(samples[-1][0].transpose(0, 1).transpose(1, 2), cmap='gray')
-    # plt.show()
-
     results_dir = cfg.get('output_dir')
     results_folder = Path(results_dir).absolute()
 
@@ -75,10 +52,27 @@ def main(cfg: EvalConfig):
     results_folder.mkdir(exist_ok=True, parents=True)
 
     for result_idx in range(cfg.batch_size):
-        result_path = str(results_folder / f"sample_{result_idx + 1}.png")
-        result = samples[-1][result_idx]
-        result = (result + 1) * 0.5
-        torchvision.utils.save_image(result, result_path)
+        if not cfg.show_diffusion:
+            result_path = str(results_folder / f"sample_{result_idx + 1}.png")
+            result = samples[-1][result_idx]
+            result = (result + 1) * 0.5
+            torchvision.utils.save_image(result, result_path)
+        else:
+            import matplotlib.pyplot as plt
+            import matplotlib.animation as animation
+
+            result_path = str(results_folder / f"sample_{result_idx + 1}.gif")
+
+            fig = plt.figure()
+            ims = []
+            num_channels = samples[-1][result_idx].size(1)
+            cmap = 'gray' if num_channels == 1 else None
+            for i in range(len(samples)):
+                im = plt.imshow(samples[i][result_idx].transpose(0, 1).transpose(1, 2), cmap=cmap, animated=True)
+                ims.append([im])
+
+            animate = animation.ArtistAnimation(fig, ims, interval=50, blit=True, repeat_delay=5000)
+            animate.save(result_path)
 
 
 if __name__ == '__main__':
