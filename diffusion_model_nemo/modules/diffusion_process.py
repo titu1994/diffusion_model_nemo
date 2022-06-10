@@ -39,7 +39,6 @@ def sigmoid_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02):
 
 
 class AbstractDiffusionProcess:
-
     def __init__(self, timesteps, schedule_name, schedule_cfg=None):
         self.timesteps = timesteps
         self.schedule_name = schedule_name
@@ -66,7 +65,13 @@ class AbstractDiffusionProcess:
 
 
 class GaussianDiffusion(AbstractDiffusionProcess):
-    def __init__(self, timesteps: int, schedule_name: str, schedule_cfg: Optional[DictConfig] = None):
+    def __init__(
+        self,
+        timesteps: int,
+        schedule_name: str,
+        schedule_cfg: Optional[DictConfig] = None,
+        objective: str = "pred_noise",
+    ):
         super().__init__(timesteps=timesteps, schedule_name=schedule_name, schedule_cfg=schedule_cfg)
 
         assert schedule_name in [
@@ -85,6 +90,9 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         elif schedule_name == 'cosine':
             self.schedule_fn = cosine_beta_schedule
 
+        assert objective in ['pred_noise', 'pred_x0']
+        self.objective = objective
+
         self.compute_constants(timesteps)
 
     def compute_constants(self, timesteps):
@@ -102,16 +110,16 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         # calculations for diffusion q(x_t | x_{t-1}) and others
         self.sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
         self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - alphas_cumprod)
-        self.sqrt_recip_alphas_cumprod = torch.sqrt(1. / alphas_cumprod)
-        self.sqrt_recipm1_alphas_cumprod = torch.sqrt(1. / alphas_cumprod - 1)
+        self.sqrt_recip_alphas_cumprod = torch.sqrt(1.0 / alphas_cumprod)
+        self.sqrt_recipm1_alphas_cumprod = torch.sqrt(1.0 / alphas_cumprod - 1)
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
         # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
         self.posterior_variance = self.betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
         self.posterior_log_variance_clipped = torch.log(torch.maximum(self.posterior_variance, torch.tensor(1e-20)))
-        self.posterior_mean_coef1 = self.betas * torch.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod)
-        self.posterior_mean_coef2 = (1. - alphas_cumprod_prev) * torch.sqrt(alphas) / (1. - alphas_cumprod)
+        self.posterior_mean_coef1 = self.betas * torch.sqrt(alphas_cumprod_prev) / (1.0 - alphas_cumprod)
+        self.posterior_mean_coef2 = (1.0 - alphas_cumprod_prev) * torch.sqrt(alphas) / (1.0 - alphas_cumprod)
 
     def extract(self, a: torch.Tensor, t: torch.Tensor, x_shape: torch.Size):
         batch_size = t.shape[0]
@@ -154,9 +162,14 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         # sqrt_one_minus_alphas_cumprod_t = self.extract(self.sqrt_one_minus_alphas_cumprod, t, x.shape)
         # sqrt_recip_alphas_t = self.extract(self.sqrt_recip_alphas, t, x.shape)
 
+        model_output = model(x, t)
         B = x.size(0)
-        x_recon = self.predict_start_from_noise(x=x, t=t, noise=model(x, t))
-        x_recon = torch.clamp(x_recon, -1., 1.)
+
+        if self.objective == 'pred_noise':
+            x_recon = self.predict_start_from_noise(x=x, t=t, noise=model_output)
+        else:
+            x_recon = model_output
+        x_recon = torch.clamp(x_recon, -1.0, 1.0)
 
         # Equation 11 in the paper; reformulated to include clipping
         # Use our model (noise predictor) to predict the mean
@@ -191,7 +204,9 @@ class GaussianDiffusion(AbstractDiffusionProcess):
             disable=not use_tqdm,
         ):
             img = self.p_sample(model, img, torch.full((b,), i, device=device, dtype=torch.long))
-            imgs.append(img.cpu())
+            # unnormalize image
+            img_cpu = (img.cpu() + 1) * 0.5
+            imgs.append(img_cpu)
         return imgs
 
     @torch.no_grad()

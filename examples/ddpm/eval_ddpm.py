@@ -55,7 +55,6 @@ def main(cfg: EvalConfig):
         if not cfg.show_diffusion:
             result_path = str(results_folder / f"sample_{result_idx + 1}.png")
             result = samples[-1][result_idx]
-            result = (result + 1) * 0.5
             torchvision.utils.save_image(result, result_path)
         else:
             import matplotlib.pyplot as plt

@@ -22,6 +22,7 @@ class Unet(NeuralModule):
             resnet_block_groups=8,
             use_convnext=True,
             convnext_mult=2,
+            learned_variance: bool = False
     ):
         super().__init__()
 
@@ -30,6 +31,7 @@ class Unet(NeuralModule):
 
         # determine dimensions
         self.channels = channels
+        self.learned_variance = learned_variance
 
         init_dim = utils.default(init_dim, dim // 3 * 2)
         self.init_conv = nn.Conv2d(channels, init_dim, kernel_size=7, padding=3)
@@ -93,7 +95,8 @@ class Unet(NeuralModule):
                 )
             )
 
-        out_dim = utils.default(out_dim, channels)
+        default_out_dim = channels * (1 if not learned_variance else 2)
+        out_dim = utils.default(out_dim, default_out_dim)
         self.final_conv = nn.Sequential(
             block_klass(dim, dim), nn.Conv2d(dim, out_dim, kernel_size=1)
         )
