@@ -1,0 +1,5 @@
+einops
+torch
+tqdm
+nemo_toolkit[core]
+datasets
