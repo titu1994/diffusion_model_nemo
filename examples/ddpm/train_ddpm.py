@@ -13,7 +13,7 @@ python train_ddpm.py ^
     --config-path="../configs/unet" ^
     --config-name="unet_small.yaml" ^
     model.image_size=28 ^
-    model.timesteps=200 ^
+    model.timesteps=1000 ^
     model.channels=1 ^
     model.save_every=500 ^
     model.diffusion_model.resnet_block_groups=8 ^

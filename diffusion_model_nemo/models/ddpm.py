@@ -10,7 +10,7 @@ from omegaconf import OmegaConf, DictConfig, open_dict
 from hydra.utils import instantiate
 
 from diffusion_model_nemo.data.hf_vision_data import HFVisionDataset
-from diffusion_model_nemo.modules.diffusion_process import AbstractSampler
+from diffusion_model_nemo.modules.diffusion_process import AbstractDiffusionProcess
 
 from nemo.core import ModelPT, PretrainedModelInfo, typecheck
 from nemo.core.neural_types import NeuralType
@@ -36,7 +36,7 @@ class DDPM(ModelPT):
         self.channels = cfg.channels
 
         self.diffusion_model = instantiate(self.cfg.diffusion_model)
-        self.sampler = instantiate(self.cfg.sampler)  # type: AbstractSampler
+        self.sampler = instantiate(self.cfg.sampler)  # type: AbstractDiffusionProcess
         self.loss = instantiate(self.cfg.loss)
 
         # setup output dirs
@@ -84,7 +84,6 @@ class DDPM(ModelPT):
         return None
 
     def _setup_dataloader(self, cfg):
-
         if cfg.name is not None:
             dataset = HFVisionDataset(name=cfg.name, split=cfg.split)
 

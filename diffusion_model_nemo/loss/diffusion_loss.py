@@ -11,6 +11,10 @@ from diffusion_model_nemo.modules import diffusion_process
 
 class DiffusionLoss(Loss):
     def __init__(self, loss_type: str, reduction='mean'):
+        self._reduction = reduction
+        if reduction == 'batch_mean':
+            reduction = 'none'
+
         super(DiffusionLoss, self).__init__(reduction=reduction)
         assert loss_type in ['l1', 'l2', 'huber'], f"Loss type {loss_type} is not implemented !"
         self.loss_type = loss_type
@@ -35,6 +39,11 @@ class DiffusionLoss(Loss):
     @typecheck()
     def forward(self, input, target):
         loss = self.loss_fn(input, target, reduction=self.reduction)
+
+        if self._reduction == 'batch_mean':
+            loss = loss.view(input.size(0), -1).sum(-1)
+            loss = loss.mean()
+
         return loss
 
 

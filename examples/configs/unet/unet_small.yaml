@@ -2,7 +2,7 @@ name: "UNet-Small"
 
 model:
   image_size: ???
-  timesteps: ???
+  timesteps: 1000
   channels: 3
   save_every: 1000  # save images every this many steps
 
@@ -51,7 +51,7 @@ model:
   loss:
     _target_: diffusion_model_nemo.loss.DiffusionLoss
     loss_type: "l2"  # can be 'l1', 'l2', or 'huber'
-    reduction: "mean"
+    reduction: "mean"  # can be 'mean', 'sum', 'batch_mean' or 'none'
 
   optim:
     name: adamw

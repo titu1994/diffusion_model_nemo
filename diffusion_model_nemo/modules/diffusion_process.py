@@ -38,7 +38,7 @@ def sigmoid_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02):
     return torch.sigmoid(betas) * (beta_end - beta_start) + beta_start
 
 
-class AbstractSampler:
+class AbstractDiffusionProcess:
 
     def __init__(self, timesteps, schedule_name, schedule_cfg=None):
         self.timesteps = timesteps
@@ -65,7 +65,7 @@ class AbstractSampler:
         raise NotImplementedError()
 
 
-class GaussianDiffusion(AbstractSampler):
+class GaussianDiffusion(AbstractDiffusionProcess):
     def __init__(self, timesteps: int, schedule_name: str, schedule_cfg: Optional[DictConfig] = None):
         super().__init__(timesteps=timesteps, schedule_name=schedule_name, schedule_cfg=schedule_cfg)
 
