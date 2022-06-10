@@ -17,7 +17,8 @@ model:
 
   diffusion_model:
     _target_: diffusion_model_nemo.modules.Unet
-    dim: ${model.image_size}
+    input_dim: ${model.image_size}
+    dim: 32
     channels: ${model.channels}
 
     # Additional arguments
@@ -26,7 +27,6 @@ model:
     resnet_block_groups: 8
     use_convnext: True
     convnext_mult: 2
-    init_dim: ${model.image_size}
     out_dim: null
 
   sampler:

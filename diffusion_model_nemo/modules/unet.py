@@ -13,8 +13,8 @@ from diffusion_model_nemo import utils
 class Unet(NeuralModule):
     def __init__(
             self,
-            dim,
-            init_dim=None,
+            input_dim,
+            dim=None,
             out_dim=None,
             dim_mults=None,
             channels=3,
@@ -33,7 +33,8 @@ class Unet(NeuralModule):
         self.channels = channels
         self.learned_variance = learned_variance
 
-        init_dim = utils.default(init_dim, dim // 3 * 2)
+        init_dim = utils.default(dim, dim // 3 * 2)
+        self.dim = init_dim
         self.init_conv = nn.Conv2d(channels, init_dim, kernel_size=7, padding=3)
 
         dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
