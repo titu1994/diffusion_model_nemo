@@ -28,11 +28,12 @@ class InterpolateConfig:
     dir_1: str = "dir1/"
     dir_2: str = "dir2/"
     model_path: str = "DDPM.nemo"
+    show_diffusion: bool = False
 
     # data arguments
     timesteps: int = -1
     image_size: int = -1
-    lambd: float = 0.5
+    lambd: float = 0.1
 
     # additional args:
     center_crop: bool = False
@@ -101,12 +102,19 @@ def main(cfg: InterpolateConfig):
 
     results_folder.mkdir(exist_ok=True, parents=True)
 
-    for result_idx in range(len(x1_images)):
-        result_path = str(results_folder / f"interpolation_{result_idx + 1}_lambda_{cfg.lambd}.png")
+    if cfg.show_diffusion:
+        for result_idx in range(len(x1_images)):
+            result_path = str(results_folder / f"interpolation_{result_idx + 1}_lambda_{cfg.lambd}.png")
 
-        sample_ = [samples[t_][result_idx] for t_ in range(cfg.timesteps)]
-        result = torch.stack(sample_, dim=0)
-        torchvision.utils.save_image(result, result_path, nrows=max(32, (cfg.timesteps + 1) // 16))
+            sample_ = [samples[t_][result_idx] for t_ in range(cfg.timesteps)]
+            result = torch.stack(sample_, dim=0)
+            torchvision.utils.save_image(result, result_path, nrows=max(32, (cfg.timesteps + 1) // 16))
+    else:
+        for result_idx in range(len(x1_images)):
+            result_path = str(results_folder / f"interpolation_{result_idx + 1}_lambda_{cfg.lambd}.png")
+
+            result = samples[-1][result_idx]
+            torchvision.utils.save_image(result, result_path)
 
 
 if __name__ == '__main__':

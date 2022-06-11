@@ -3,7 +3,7 @@ from torchvision.transforms import Compose, ToTensor, Lambda, ToPILImage, Center
 import numpy as np
 from typing import Optional, Dict
 
-from datasets import load_dataset
+from datasets import load_dataset, Dataset as HFDataset
 from torchvision import transforms
 from huggingface_hub.hf_api import HfFolder
 
@@ -19,9 +19,22 @@ infer_transform = Compose([transforms.ToTensor(), transforms.Lambda(lambda t: (t
 
 
 # define function
-def transforms(examples):
-    examples["pixel_values"] = [transform(image) for image in examples["image"]]
-    del examples["image"]
+
+def transforms(examples: dict):
+    # resolve the key for the data loader
+    possible_keys = ['image', 'img']
+    image_key = None
+    for key in possible_keys:
+        if key in examples:
+            image_key = key
+            break
+
+    if image_key is None:
+        raise ValueError(f"Could not retrieve image from the dataset. Tried {possible_keys}, which "
+                         f"did not match dataset columns : {list(examples.keys())}")
+
+    examples["pixel_values"] = [transform(image) for image in examples[image_key]]
+    del examples[image_key]
 
     return examples
 
@@ -73,7 +86,10 @@ class HFVisionDataset(Dataset):
 
         has_auth_token = HfFolder.get_token() is not None
         dataset = load_dataset(name, split=split, use_auth_token=has_auth_token)
-        self.dataset = dataset.with_transform(transforms).remove_columns("label")
+        self.dataset = dataset.with_transform(transforms)
+
+        if 'label' in self.dataset.column_names:
+            self.dataset.remove_columns('label')
 
     @property
     def output_types(self) -> Optional[Dict[str, NeuralType]]:

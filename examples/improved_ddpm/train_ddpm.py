@@ -29,6 +29,29 @@ python train_ddpm.py ^
     exp_manager.wandb_logger_kwargs.name="DDPM" ^
     exp_manager.wandb_logger_kwargs.project="DDPM" ^
     exp_manager.wandb_logger_kwargs.entity="smajumdar"
+    
+    
+# CIFAR 10
+
+python train_ddpm.py ^
+    --config-path="../configs/improved_ddpm" ^
+    --config-name="unet_small.yaml" ^
+    model.image_size=32 ^
+    model.timesteps=1000 ^
+    model.channels=3 ^
+    model.save_every=500 ^
+    model.diffusion_model.resnet_block_groups=8 ^
+    model.diffusion_model.dim_mults=[1,2,4,8] ^
+    model.train_ds.name="cifar10" ^
+    model.train_ds.split="train" ^
+    trainer.max_epochs=5 ^
+    trainer.strategy=null ^
+    exp_manager.name="Improved-DDPM" ^
+    exp_manager.exp_dir="CIFAR-Experiments" ^
+    exp_manager.create_wandb_logger=True ^
+    exp_manager.wandb_logger_kwargs.name="DDPM" ^
+    exp_manager.wandb_logger_kwargs.project="CIFAR-DDPM" ^
+    exp_manager.wandb_logger_kwargs.entity="smajumdar"
 
 """
 
