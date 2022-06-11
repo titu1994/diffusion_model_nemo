@@ -20,7 +20,7 @@ python train_ddpm.py ^
     model.diffusion_model.dim_mults=[1,2,4] ^
     model.train_ds.name="fashion_mnist" ^
     model.train_ds.split="train" ^
-    trainer.max_epochs=1 ^
+    trainer.max_epochs=5 ^
     trainer.strategy=null ^
     exp_manager.name="DDPM" ^
     exp_manager.exp_dir="Experiments" ^

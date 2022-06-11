@@ -14,7 +14,7 @@ class Unet(NeuralModule):
     def __init__(
             self,
             input_dim,
-            dim=None,
+            dim,
             out_dim=None,
             dim_mults=None,
             channels=3,
@@ -33,11 +33,11 @@ class Unet(NeuralModule):
         self.channels = channels
         self.learned_variance = learned_variance
 
-        init_dim = utils.default(dim, dim // 3 * 2)
-        self.dim = init_dim
-        self.init_conv = nn.Conv2d(channels, init_dim, kernel_size=7, padding=3)
+        dim = utils.default(dim, input_dim // 3 * 2)
+        self.dim = dim
+        self.init_conv = nn.Conv2d(channels, dim, kernel_size=7, padding=3)
 
-        dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
+        dims = [dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))
 
         if use_convnext:
