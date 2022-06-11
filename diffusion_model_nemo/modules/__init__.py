@@ -5,5 +5,5 @@ from diffusion_model_nemo.modules.diffusion_process import (
     cosine_beta_schedule,
     sigmoid_beta_schedule,
     AbstractDiffusionProcess,
-    GaussianDiffusion,
 )
+from diffusion_model_nemo.modules.gaussian_diffusion import GaussianDiffusion
