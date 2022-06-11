@@ -24,7 +24,7 @@ class LearnedGaussianDiffusion(GaussianDiffusion):
         )
         self.compute_constants(timesteps)
 
-    def p_mean_variance(self, model, x, t, model_output=None):
+    def p_mean_variance(self, model, x, t, model_output: torch.Tensor = None, return_pred_x_start: bool = False):
         model_output = utils.default(model_output, lambda: model(x, t))
         pred_noise, var_interp_frac_unnormalized = model_output.chunk(2, dim=1)
 
@@ -35,10 +35,13 @@ class LearnedGaussianDiffusion(GaussianDiffusion):
         model_log_variance = var_interp_frac * max_log + (1 - var_interp_frac) * min_log
         model_variance = model_log_variance.exp()
 
-        x_start = self.predict_start_from_noise(x, t, pred_noise)
+        x_start = self.predict_start_from_noise(x_t=x, t=t, noise=pred_noise)
         x_start.clamp_(-1., 1.)
 
         model_mean, _ = self.q_posterior(x_start, x, t)
 
-        return model_mean, model_variance, model_log_variance
+        if return_pred_x_start:
+            return model_mean, model_variance, model_log_variance, x_start
+        else:
+            return model_mean, model_variance, model_log_variance
 

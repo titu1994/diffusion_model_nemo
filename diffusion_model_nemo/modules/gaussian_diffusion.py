@@ -94,27 +94,39 @@ class GaussianDiffusion(AbstractDiffusionProcess):
 
         return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
 
-    def predict_start_from_noise(self, x: torch.Tensor, t: torch.Tensor, noise: torch.Tensor):
-        assert x.shape == noise.shape, f"{x.shape} != {noise.shape}"
-        sqrt_recip_alphas_cumprod = self.extract(self.sqrt_recip_alphas_cumprod, t, x.shape)
-        sqrt_recipm1_alphas_cumprod = self.extract(self.sqrt_recipm1_alphas_cumprod, t, x.shape)
+    def predict_start_from_noise(self, x_t: torch.Tensor, t: torch.Tensor, noise: torch.Tensor):
+        assert x_t.shape == noise.shape, f"{x_t.shape} != {noise.shape}"
+        sqrt_recip_alphas_cumprod = self.extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape)
+        sqrt_recipm1_alphas_cumprod = self.extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape)
 
-        return sqrt_recip_alphas_cumprod * x - sqrt_recipm1_alphas_cumprod * noise
+        return sqrt_recip_alphas_cumprod * x_t - sqrt_recipm1_alphas_cumprod * noise
 
-    def p_mean_variance(self, model, x: torch.Tensor, t: torch.Tensor):
-        model_output = model(x, t)
+    def p_mean_variance(
+        self,
+        model,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        model_output: torch.Tensor = None,
+        return_pred_x_start: bool = False,
+    ):
+        model_output = utils.default(model_output, lambda: model(x, t))
 
         if self.objective == 'pred_noise':
-            x_recon = self.predict_start_from_noise(x=x, t=t, noise=model_output)
+            x_recon = self.predict_start_from_noise(x_t=x, t=t, noise=model_output)
         else:
             x_recon = model_output
 
+        # Always clamp
         x_recon.clamp_(-1.0, 1.0)
 
         # Equation 11 in the paper; reformulated to include clipping
         # Use our model (noise predictor) to predict the mean
         model_mean, posterior_log_variance = self.q_posterior(x_start=x_recon, x=x, t=t)
-        return model_mean, None, posterior_log_variance
+
+        if return_pred_x_start:
+            return model_mean, None, posterior_log_variance, x_recon
+        else:
+            return model_mean, None, posterior_log_variance
 
     @torch.no_grad()
     def p_sample(self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor):

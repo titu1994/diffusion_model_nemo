@@ -56,7 +56,7 @@ class AbstractDiffusionProcess(ABC, torch.nn.Module):
         raise NotImplementedError()
 
     @abstractmethod
-    def p_mean_variance(self, model, x: torch.Tensor, t: torch.Tensor):
+    def p_mean_variance(self, model, x: torch.Tensor, t: torch.Tensor, model_output: torch.Tensor = None):
         raise NotImplementedError()
 
     @abstractmethod

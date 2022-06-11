@@ -6,11 +6,16 @@ from einops import rearrange
 
 
 class Block(nn.Module):
-    def __init__(self, dim, dim_out, groups=8):
+    def __init__(self, dim, dim_out, groups=8, dropout=None):
         super().__init__()
         self.proj = nn.Conv2d(dim, dim_out, kernel_size=3, padding=1)
         self.norm = nn.GroupNorm(groups, dim_out)
         self.act = nn.SiLU()
+
+        if dropout is None:
+            self.dropout = None
+        else:
+            self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, scale_shift=None):
         x = self.proj(x)
@@ -21,13 +26,17 @@ class Block(nn.Module):
             x = x * (scale + 1) + shift
 
         x = self.act(x)
+
+        if self.dropout is not None:
+            x = self.dropout(x)
+
         return x
 
 
 class ResnetBlock(nn.Module):
     """https://arxiv.org/abs/1512.03385"""
 
-    def __init__(self, dim, dim_out, *, time_emb_dim=None, groups=8):
+    def __init__(self, dim, dim_out, *, time_emb_dim=None, groups=8, dropout=None):
         super().__init__()
         self.mlp = (
             nn.Sequential(nn.SiLU(), nn.Linear(time_emb_dim, dim_out))
@@ -36,7 +45,7 @@ class ResnetBlock(nn.Module):
         )
 
         self.block1 = Block(dim, dim_out, groups=groups)
-        self.block2 = Block(dim_out, dim_out, groups=groups)
+        self.block2 = Block(dim_out, dim_out, groups=groups, dropout=dropout)
         self.res_conv = nn.Conv2d(dim, dim_out, kernel_size=1) if dim != dim_out else nn.Identity()
 
     def forward(self, x, time_emb=None):
@@ -53,7 +62,7 @@ class ResnetBlock(nn.Module):
 class ConvNextBlock(nn.Module):
     """https://arxiv.org/abs/2201.03545"""
 
-    def __init__(self, dim, dim_out, *, time_emb_dim=None, mult=2, norm=True):
+    def __init__(self, dim, dim_out, *, time_emb_dim=None, mult=2, norm=True, dropout=None):
         super().__init__()
         self.mlp = (
             nn.Sequential(nn.GELU(), nn.Linear(time_emb_dim, dim))
@@ -73,6 +82,11 @@ class ConvNextBlock(nn.Module):
 
         self.res_conv = nn.Conv2d(dim, dim_out, kernel_size=1) if dim != dim_out else nn.Identity()
 
+        if dropout is not None:
+            self.dropout = nn.Dropout(dropout)
+        else:
+            self.dropout = None
+
     def forward(self, x, time_emb=None):
         h = self.ds_conv(x)
 
@@ -82,4 +96,8 @@ class ConvNextBlock(nn.Module):
             h = h + rearrange(condition, "b c -> b c 1 1")
 
         h = self.net(h)
+
+        if self.dropout is not None:
+            h = self.dropout(h)
+
         return h + self.res_conv(x)

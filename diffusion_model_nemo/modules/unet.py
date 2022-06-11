@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from functools import partial
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 from nemo.core import NeuralModule, typecheck
 from nemo.core.neural_types import NeuralType
@@ -13,15 +13,16 @@ from diffusion_model_nemo import utils
 class Unet(NeuralModule):
     def __init__(
             self,
-            input_dim,
-            dim,
-            out_dim=None,
-            dim_mults=None,
-            channels=3,
-            with_time_emb=True,
-            resnet_block_groups=8,
-            use_convnext=True,
-            convnext_mult=2,
+            input_dim: int,
+            dim: int,
+            out_dim: Optional[int] = None,
+            dim_mults: Optional[List[int]] = None,
+            channels: int = 3,
+            with_time_emb: bool = True,
+            resnet_block_groups: int = 8,
+            use_convnext: bool = True,
+            convnext_mult: int = 2,
+            dropout: Optional[float] = None,
             learned_variance: bool = False
     ):
         super().__init__()
@@ -41,9 +42,9 @@ class Unet(NeuralModule):
         in_out = list(zip(dims[:-1], dims[1:]))
 
         if use_convnext:
-            block_klass = partial(convnext.ConvNextBlock, mult=convnext_mult)
+            block_klass = partial(convnext.ConvNextBlock, mult=convnext_mult, dropout=dropout)
         else:
-            block_klass = partial(convnext.ResnetBlock, groups=resnet_block_groups)
+            block_klass = partial(convnext.ResnetBlock, groups=resnet_block_groups, dropout=dropout)
 
         # time embeddings
         if with_time_emb:
