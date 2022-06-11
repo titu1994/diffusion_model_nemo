@@ -40,16 +40,16 @@ class DDPM(AbstractDiffusionModel):
     def training_step(self, batch, batch_nb):
         device = next(self.parameters()).device
         batch_size = batch["pixel_values"].shape[0]
-        samples = batch["pixel_values"]
+        samples = batch["pixel_values"]  # x_start
 
         # Algorithm 1 line 3: sample t uniformally for every example in the batch
         t = torch.randint(0, self.timesteps, size=(batch_size,), device=device, dtype=torch.long)
         noise = torch.randn_like(samples)
 
-        x_noisy = self.sampler.q_sample(x_start=samples, t=t, noise=noise)
-        predicted_noise = self.diffusion_model(x=x_noisy, time=t)
+        x_t = self.sampler.q_sample(x_start=samples, t=t, noise=noise)
+        model_output = self.diffusion_model(x=x_t, time=t)
 
-        loss = self.loss(input=predicted_noise, target=noise)
+        loss = self.loss(input=model_output, target=noise)
 
         self.log('train_loss', loss.detach())
         self.log('learning_rate', self._optimizer.param_groups[0]['lr'])

@@ -1,1 +1,2 @@
-from diffusion_model_nemo.loss.diffusion_loss import DiffusionLoss
+from diffusion_model_nemo.loss.simple_loss import DiffusionLoss
+from diffusion_model_nemo.loss.variational_bound_loss import VariationalBoundLoss

@@ -48,7 +48,15 @@ class AbstractDiffusionProcess(ABC, torch.nn.Module):
         raise NotImplementedError()
 
     @abstractmethod
+    def q_posterior(self, x_start: torch.Tensor, x: torch.Tensor, t: torch.Tensor):
+        return NotImplementedError()
+
+    @abstractmethod
     def q_sample(self, x_start: torch.Tensor, t: torch.Tensor, noise: torch.Tensor = None):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def p_mean_variance(self, model, x: torch.Tensor, t: torch.Tensor):
         raise NotImplementedError()
 
     @abstractmethod

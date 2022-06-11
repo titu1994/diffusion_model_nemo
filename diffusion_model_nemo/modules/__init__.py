@@ -7,3 +7,4 @@ from diffusion_model_nemo.modules.diffusion_process import (
     AbstractDiffusionProcess,
 )
 from diffusion_model_nemo.modules.gaussian_diffusion import GaussianDiffusion
+from diffusion_model_nemo.modules.learned_gaussian_diffusion import LearnedGaussianDiffusion

@@ -1,16 +1,17 @@
 import pytorch_lightning as pl
 from omegaconf import OmegaConf
 
-from diffusion_model_nemo.models import DDPM
+from diffusion_model_nemo.models import ImprovedDDPM
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
 
 """
 # Train script
-
+    
+    
 python train_ddpm.py ^
-    --config-path="../configs/ddpm" ^
+    --config-path="../configs/improved_ddpm" ^
     --config-name="unet_small.yaml" ^
     model.image_size=28 ^
     model.timesteps=1000 ^
@@ -22,14 +23,13 @@ python train_ddpm.py ^
     model.train_ds.split="train" ^
     trainer.max_epochs=5 ^
     trainer.strategy=null ^
-    exp_manager.name="DDPM" ^
+    exp_manager.name="Improved-DDPM" ^
     exp_manager.exp_dir="Experiments" ^
     exp_manager.create_wandb_logger=True ^
     exp_manager.wandb_logger_kwargs.name="DDPM" ^
     exp_manager.wandb_logger_kwargs.project="DDPM" ^
     exp_manager.wandb_logger_kwargs.entity="smajumdar"
-    
-    
+
 """
 
 
@@ -39,7 +39,7 @@ def main(cfg):
 
     trainer = pl.Trainer(**cfg.trainer)
     exp_manager(trainer, cfg.get("exp_manager", None))
-    model = DDPM(cfg=cfg.model, trainer=trainer)
+    model = ImprovedDDPM(cfg=cfg.model, trainer=trainer)
 
     # Initialize the weights of the model from another model, if provided via config
     model.maybe_init_from_pretrained_checkpoint(cfg)

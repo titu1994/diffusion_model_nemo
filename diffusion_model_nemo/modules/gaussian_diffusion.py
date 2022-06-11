@@ -94,7 +94,6 @@ class GaussianDiffusion(AbstractDiffusionProcess):
 
         return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
 
-    @torch.no_grad()
     def predict_start_from_noise(self, x: torch.Tensor, t: torch.Tensor, noise: torch.Tensor):
         assert x.shape == noise.shape, f"{x.shape} != {noise.shape}"
         sqrt_recip_alphas_cumprod = self.extract(self.sqrt_recip_alphas_cumprod, t, x.shape)
@@ -102,26 +101,30 @@ class GaussianDiffusion(AbstractDiffusionProcess):
 
         return sqrt_recip_alphas_cumprod * x - sqrt_recipm1_alphas_cumprod * noise
 
-    @torch.no_grad()
-    def p_sample(self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor):
-        # betas_t = self.extract(self.betas, t, x.shape)
-        # sqrt_one_minus_alphas_cumprod_t = self.extract(self.sqrt_one_minus_alphas_cumprod, t, x.shape)
-        # sqrt_recip_alphas_t = self.extract(self.sqrt_recip_alphas, t, x.shape)
-
+    def p_mean_variance(self, model, x: torch.Tensor, t: torch.Tensor):
         model_output = model(x, t)
-        B = x.size(0)
 
         if self.objective == 'pred_noise':
             x_recon = self.predict_start_from_noise(x=x, t=t, noise=model_output)
         else:
             x_recon = model_output
-        x_recon = torch.clamp(x_recon, -1.0, 1.0)
+
+        x_recon.clamp_(-1.0, 1.0)
 
         # Equation 11 in the paper; reformulated to include clipping
         # Use our model (noise predictor) to predict the mean
-        model_mean, model_log_variance = self.q_posterior(x_start=x_recon, x=x, t=t)
+        model_mean, posterior_log_variance = self.q_posterior(x_start=x_recon, x=x, t=t)
+        return model_mean, None, posterior_log_variance
+
+    @torch.no_grad()
+    def p_sample(self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor):
+        # betas_t = self.extract(self.betas, t, x.shape)
+        # sqrt_one_minus_alphas_cumprod_t = self.extract(self.sqrt_one_minus_alphas_cumprod, t, x.shape)
+        # sqrt_recip_alphas_t = self.extract(self.sqrt_recip_alphas, t, x.shape)
+        B = x.size(0)
 
         # model_mean = sqrt_recip_alphas_t * (x - betas_t * model(x, t) / sqrt_one_minus_alphas_cumprod_t)
+        model_mean, _, model_log_variance = self.p_mean_variance(model, x=x, t=t)
 
         # no noise when t == 0
         nonzero_mask = (1 - (t == 0).float()).reshape(B, *((1,) * (len(x.shape) - 1)))

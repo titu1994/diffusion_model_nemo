@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
 from typing import List, Dict, Optional, Union

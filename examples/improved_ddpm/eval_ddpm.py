@@ -6,7 +6,7 @@ import datetime
 from pathlib import Path
 from pytorch_lightning import seed_everything
 
-from diffusion_model_nemo.models import DDPM
+from diffusion_model_nemo.models import ImprovedDDPM
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 
@@ -20,7 +20,7 @@ python eval_ddpm.py ^
 
 @dataclass
 class EvalConfig:
-    model_path: str = "DDPM.nemo"
+    model_path: str = "Improved-DDPM.nemo"
     batch_size: int = 32
     image_size: int = -1
 
@@ -43,7 +43,7 @@ def main(cfg: EvalConfig):
 
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
 
-    model = DDPM.restore_from(cfg.model_path)  # type: DDPM
+    model = ImprovedDDPM.restore_from(cfg.model_path)  # type: ImprovedDDPM
 
     if cfg.image_size < 0:
         cfg.image_size = model.image_size
