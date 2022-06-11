@@ -81,11 +81,11 @@ def get_reverse_transform(inverse_scale=True, uint=False):
 
 
 class HFVisionDataset(Dataset):
-    def __init__(self, name: str, split: str):
+    def __init__(self, name: str, split: str, cache_dir: str = None):
         super().__init__()
 
         has_auth_token = HfFolder.get_token() is not None
-        dataset = load_dataset(name, split=split, use_auth_token=has_auth_token)
+        dataset = load_dataset(name, split=split, cache_dir=cache_dir, use_auth_token=has_auth_token)
         self.dataset = dataset.with_transform(transforms)
 
         if 'label' in self.dataset.column_names:

@@ -49,7 +49,7 @@ class AbstractDiffusionModel(ModelPT):
 
     def _setup_dataloader(self, cfg):
         if cfg.name is not None:
-            dataset = HFVisionDataset(name=cfg.name, split=cfg.split)
+            dataset = HFVisionDataset(name=cfg.name, split=cfg.split, cache_dir=cfg.get('cache_dir', None))
 
             dataloader = DataLoader(
                 dataset,

@@ -9,6 +9,7 @@ model:
   train_ds:
     name: null
     split: null
+    cache_dir: null
     # dataloader params
     batch_size: 128 # you may increase batch_size if your memory allows
     shuffle: true

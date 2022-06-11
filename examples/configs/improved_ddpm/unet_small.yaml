@@ -9,6 +9,7 @@ model:
   train_ds:
     name: null
     split: null
+    cache_dir: null
     # dataloader params
     batch_size: 128 # you may increase batch_size if your memory allows
     shuffle: true
@@ -26,7 +27,7 @@ model:
     dim_mults: [1, 2, 4, 8]
     with_time_emb: True
     resnet_block_groups: 8
-    use_convnext: True
+    use_convnext: False
     convnext_mult: 2
     out_dim: null
 
