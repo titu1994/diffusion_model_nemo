@@ -62,7 +62,7 @@ class ImprovedDDPM(DDPM):
         model_mean, _, model_log_variance = self.sampler.p_mean_variance(
             self.diffusion_model, x=x_t, t=t, model_output=model_output
         )
-        vb_losses = self.vb_loss(
+        vb_losses, decoder_nll = self.vb_loss(
             samples=samples,
             model_mean=model_mean,
             model_log_variance=model_log_variance,
@@ -77,6 +77,7 @@ class ImprovedDDPM(DDPM):
         self.log('train_loss', total_loss.detach())
         self.log('simple_loss', simple_losses.detach())
         self.log('vb_losses', vb_losses.detach())
+        self.log('decoded_negative_log_likelihood', decoder_nll.detach())
         self.log('learning_rate', self._optimizer.param_groups[0]['lr'])
 
         # save generated images

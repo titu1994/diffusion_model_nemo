@@ -59,6 +59,7 @@ model:
   vb_loss:
     _target_: diffusion_model_nemo.loss.VariationalBoundLoss
     weight: 0.001
+    detach_model_mean: True  # done for stability purposes during training
     reduction: "mean"  # can be 'mean', 'sum', 'batch_mean' or 'none'
 
   optim:
