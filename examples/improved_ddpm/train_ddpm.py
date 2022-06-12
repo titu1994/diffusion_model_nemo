@@ -17,6 +17,7 @@ python train_ddpm.py ^
     model.timesteps=1000 ^
     model.channels=1 ^
     model.save_every=500 ^
+    model.diffusion_model.resnet_block_order='bn_act_conv' ^
     model.diffusion_model.resnet_block_groups=8 ^
     model.diffusion_model.dim_mults=[1,2,4] ^
     model.diffusion_model.dropout=0.1 ^
@@ -41,8 +42,9 @@ python train_ddpm.py ^
     model.timesteps=1000 ^
     model.channels=3 ^
     model.save_every=1000 ^
+    model.diffusion_model.resnet_block_order='bn_act_conv' ^
     model.diffusion_model.dim=64 ^
-    model.diffusion_model.use_convnext=false ^
+    model.diffusion_model.dropout=0.1 ^
     model.train_ds.name="cifar10" ^
     model.train_ds.split="train" ^
     model.train_ds.batch_size=32 ^

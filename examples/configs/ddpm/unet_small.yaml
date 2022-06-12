@@ -25,8 +25,9 @@ model:
     # Additional arguments
     dim_mults: [1, 2, 4, 8]
     with_time_emb: True
+    resnet_block_order: 'bn_act_conv'  # can be bn_act_conv or conv_bn_relu
     resnet_block_groups: 8
-    use_convnext: True
+    use_convnext: False
     convnext_mult: 2
     out_dim: null
     dropout: null

@@ -12,18 +12,19 @@ from diffusion_model_nemo import utils
 
 class Unet(NeuralModule):
     def __init__(
-            self,
-            input_dim: int,
-            dim: int,
-            out_dim: Optional[int] = None,
-            dim_mults: Optional[List[int]] = None,
-            channels: int = 3,
-            with_time_emb: bool = True,
-            resnet_block_groups: int = 8,
-            use_convnext: bool = True,
-            convnext_mult: int = 2,
-            dropout: Optional[float] = None,
-            learned_variance: bool = False
+        self,
+        input_dim: int,
+        dim: int,
+        out_dim: Optional[int] = None,
+        dim_mults: Optional[List[int]] = None,
+        channels: int = 3,
+        with_time_emb: bool = True,
+        resnet_block_groups: int = 8,
+        use_convnext: bool = True,
+        convnext_mult: int = 2,
+        resnet_block_order: str = 'bn_act_conv',
+        dropout: Optional[float] = None,
+        learned_variance: bool = False,
     ):
         super().__init__()
 
@@ -37,6 +38,7 @@ class Unet(NeuralModule):
         dim = utils.default(dim, input_dim // 3 * 2)
         self.dim = dim
         self.init_conv = nn.Conv2d(channels, dim, kernel_size=7, padding=3)
+        self.resnet_block_order = resnet_block_order
 
         dims = [dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))
@@ -44,7 +46,9 @@ class Unet(NeuralModule):
         if use_convnext:
             block_klass = partial(convnext.ConvNextBlock, mult=convnext_mult, dropout=dropout)
         else:
-            block_klass = partial(convnext.ResnetBlock, groups=resnet_block_groups, dropout=dropout)
+            block_klass = partial(
+                convnext.ResnetBlock, groups=resnet_block_groups, order=resnet_block_order, dropout=dropout
+            )
 
         # time embeddings
         if with_time_emb:
@@ -99,9 +103,12 @@ class Unet(NeuralModule):
 
         default_out_dim = channels * (1 if not learned_variance else 2)
         out_dim = utils.default(out_dim, default_out_dim)
-        self.final_conv = nn.Sequential(
-            block_klass(dim, dim), nn.Conv2d(dim, out_dim, kernel_size=1)
-        )
+
+        if self.resnet_block_order == 'bn_act_conv':
+            output = [nn.GroupNorm(resnet_block_groups, dim), nn.SiLU(), nn.Conv2d(dim, out_dim, kernel_size=1)]
+        else:
+            output = [nn.Conv2d(dim, out_dim, kernel_size=1)]
+        self.final_conv = nn.Sequential(block_klass(dim, dim), *output)
 
     @property
     def input_types(self) -> Optional[Dict[str, NeuralType]]:

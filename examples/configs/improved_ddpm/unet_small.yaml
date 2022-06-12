@@ -25,11 +25,14 @@ model:
 
     # Additional arguments
     dim_mults: [1, 2, 4, 8]
-    with_time_emb: True
+    resnet_block_order: 'conv_bn_relu'
     resnet_block_groups: 8
     use_convnext: False
     convnext_mult: 2
+    with_time_emb: True
     out_dim: null
+
+    # regularization
     dropout: null
 
   sampler:

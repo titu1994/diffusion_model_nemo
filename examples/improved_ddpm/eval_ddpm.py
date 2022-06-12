@@ -24,6 +24,7 @@ class EvalConfig:
     batch_size: int = 32
     image_size: int = -1
 
+    # file settings
     output_dir: str = "samples"
     add_timestamp: bool = True
 

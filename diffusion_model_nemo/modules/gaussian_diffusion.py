@@ -53,24 +53,26 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         self.betas = self.schedule_fn(timesteps=timesteps, **scheduler_cfg)
 
         # define alphas
-        alphas = 1.0 - self.betas
-        alphas_cumprod = torch.cumprod(alphas, dim=0)
-        alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value=1.0)
-        self.sqrt_recip_alphas = torch.sqrt(1.0 / alphas)
+        self.alphas = 1.0 - self.betas
+        self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
+        self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0)
+        self.sqrt_recip_alphas = torch.sqrt(1.0 / self.alphas)
 
         # calculations for diffusion q(x_t | x_{t-1}) and others
-        self.sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
-        self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - alphas_cumprod)
-        self.sqrt_recip_alphas_cumprod = torch.sqrt(1.0 / alphas_cumprod)
-        self.sqrt_recipm1_alphas_cumprod = torch.sqrt(1.0 / alphas_cumprod - 1)
+        self.sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
+        self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - self.alphas_cumprod)
+        self.sqrt_recip_alphas_cumprod = torch.sqrt(1.0 / self.alphas_cumprod)
+        self.sqrt_recipm1_alphas_cumprod = torch.sqrt(1.0 / self.alphas_cumprod - 1)
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
         # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
-        self.posterior_variance = self.betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
+        self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
         self.posterior_log_variance_clipped = torch.log(torch.maximum(self.posterior_variance, torch.tensor(1e-20)))
-        self.posterior_mean_coef1 = self.betas * torch.sqrt(alphas_cumprod_prev) / (1.0 - alphas_cumprod)
-        self.posterior_mean_coef2 = (1.0 - alphas_cumprod_prev) * torch.sqrt(alphas) / (1.0 - alphas_cumprod)
+        self.posterior_mean_coef1 = self.betas * torch.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
+        self.posterior_mean_coef2 = (
+            (1.0 - self.alphas_cumprod_prev) * torch.sqrt(self.alphas) / (1.0 - self.alphas_cumprod)
+        )
 
     def q_posterior(self, x_start: torch.Tensor, x: torch.Tensor, t: torch.Tensor):
         """
@@ -148,7 +150,7 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         # Algorithm 2 line 4 (after clipping reformulation):
         return model_mean + nonzero_mask * torch.exp(0.5 * model_log_variance) * noise
 
-    # Algorithm 2 (including returning all images)
+    # # Algorithm 2 (including returning all images)
     @torch.no_grad()
     def p_sample_loop(self, model, shape, use_tqdm=True):
         device = next(model.parameters()).device
@@ -157,7 +159,6 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         # start from pure noise (for each example in the batch)
         img = torch.randn(shape, device=device)
         imgs = []
-
         for i in tqdm(
             reversed(range(0, self.timesteps)),
             desc='Sampling loop time step',
@@ -169,6 +170,43 @@ class GaussianDiffusion(AbstractDiffusionProcess):
             img_cpu = (img.cpu() + 1) * 0.5
             imgs.append(img_cpu)
         return imgs
+
+    # Algorithm 2 (including returning all images)
+    # @torch.no_grad()
+    # def p_sample_loop(self, model, shape, use_tqdm=True):
+    #     device = next(model.parameters()).device
+    #
+    #     b = shape[0]
+    #     # start from pure noise (for each example in the batch)
+    #     img = torch.randn(shape, device=device)
+    #     imgs = []
+    #
+    #     stride = 2
+    #     initial_steps = max(1, self.timesteps // stride)
+    #
+    #     for i in tqdm(
+    #         reversed(range(0, initial_steps)),
+    #         desc='Sampling loop time step',
+    #         total=self.timesteps,
+    #         disable=not use_tqdm,
+    #     ):
+    #         img = self.p_sample(model, img, torch.full((b,), i, device=device, dtype=torch.long))
+    #         # unnormalize image
+    #         img_cpu = (img.cpu() + 1) * 0.5
+    #         imgs.append(img_cpu)
+    #
+    #     for i in tqdm(
+    #             reversed(range(initial_steps + 1, self.timesteps, stride)),
+    #             desc='Sampling loop time step',
+    #             total=self.timesteps,
+    #             disable=not use_tqdm,
+    #     ):
+    #         img = self.p_sample(model, img, torch.full((b,), i, device=device, dtype=torch.long))
+    #         # unnormalize image
+    #         img_cpu = (img.cpu() + 1) * 0.5
+    #         imgs.append(img_cpu)
+    #
+    #     return imgs
 
     @torch.no_grad()
     def sample(self, model: torch.nn.Module, shape):
