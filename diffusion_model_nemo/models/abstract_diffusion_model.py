@@ -118,3 +118,5 @@ class AbstractDiffusionModel(ModelPT):
         self.sampler = instantiate(sampler_cfg)  # type: AbstractDiffusionProcess
         self.cfg.sampler = sampler_cfg
         self.cfg = self.cfg  # update PTL config
+
+        logging.info(f"Sampler changed to : \n{OmegaConf.to_yaml(sampler_cfg)}")

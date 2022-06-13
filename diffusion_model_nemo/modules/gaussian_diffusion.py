@@ -171,43 +171,6 @@ class GaussianDiffusion(AbstractDiffusionProcess):
             imgs.append(img_cpu)
         return imgs
 
-    # Algorithm 2 (including returning all images)
-    # @torch.no_grad()
-    # def p_sample_loop(self, model, shape, use_tqdm=True):
-    #     device = next(model.parameters()).device
-    #
-    #     b = shape[0]
-    #     # start from pure noise (for each example in the batch)
-    #     img = torch.randn(shape, device=device)
-    #     imgs = []
-    #
-    #     stride = 2
-    #     initial_steps = max(1, self.timesteps // stride)
-    #
-    #     for i in tqdm(
-    #         reversed(range(0, initial_steps)),
-    #         desc='Sampling loop time step',
-    #         total=self.timesteps,
-    #         disable=not use_tqdm,
-    #     ):
-    #         img = self.p_sample(model, img, torch.full((b,), i, device=device, dtype=torch.long))
-    #         # unnormalize image
-    #         img_cpu = (img.cpu() + 1) * 0.5
-    #         imgs.append(img_cpu)
-    #
-    #     for i in tqdm(
-    #             reversed(range(initial_steps + 1, self.timesteps, stride)),
-    #             desc='Sampling loop time step',
-    #             total=self.timesteps,
-    #             disable=not use_tqdm,
-    #     ):
-    #         img = self.p_sample(model, img, torch.full((b,), i, device=device, dtype=torch.long))
-    #         # unnormalize image
-    #         img_cpu = (img.cpu() + 1) * 0.5
-    #         imgs.append(img_cpu)
-    #
-    #     return imgs
-
     @torch.no_grad()
     def sample(self, model: torch.nn.Module, shape):
         return self.p_sample_loop(model, shape=shape)
