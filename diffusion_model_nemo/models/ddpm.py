@@ -32,10 +32,8 @@ class DDPM(AbstractDiffusionModel):
         return None
 
     @typecheck()
-    def forward(self, batch_size, image_size):
-        shape = [batch_size, self.channels, image_size, image_size]
-        samples = self.sampler.sample(self.diffusion_model, shape)
-        return samples
+    def forward(self, x_t: torch.Tensor, t: torch.Tensor):
+        return self.diffusion_model(x_t, t)
 
     def training_step(self, batch, batch_nb):
         device = next(self.parameters()).device
@@ -62,7 +60,8 @@ class DDPM(AbstractDiffusionModel):
 
     def sample(self, batch_size: int, image_size: int):
         with torch.inference_mode():
-            return self.forward(batch_size=batch_size, image_size=image_size)
+            shape = [batch_size, self.channels, image_size, image_size]
+            return self.sampler.sample(self.diffusion_model, shape=shape)
 
     def interpolate(self, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.5, **kwargs):
         with torch.inference_mode():

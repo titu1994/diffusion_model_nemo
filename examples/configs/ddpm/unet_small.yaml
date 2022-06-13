@@ -30,7 +30,9 @@ model:
     use_convnext: False
     convnext_mult: 2
     out_dim: null
-    dropout: null
+
+    # regularization
+    dropout: 0.0
 
   sampler:
     _target_: diffusion_model_nemo.modules.GaussianDiffusion

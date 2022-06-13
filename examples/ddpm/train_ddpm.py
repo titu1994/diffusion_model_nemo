@@ -9,6 +9,7 @@ from nemo.utils.exp_manager import exp_manager
 """
 # Train script
 
+# Fashion MNIST
 python train_ddpm.py ^
     --config-path="../configs/ddpm" ^
     --config-name="unet_small.yaml" ^
@@ -27,6 +28,30 @@ python train_ddpm.py ^
     exp_manager.create_wandb_logger=True ^
     exp_manager.wandb_logger_kwargs.name="DDPM" ^
     exp_manager.wandb_logger_kwargs.project="DDPM" ^
+    exp_manager.wandb_logger_kwargs.entity="smajumdar"
+    
+    
+# CIFAR 10
+
+python train_ddpm.py ^
+    --config-path="../configs/ddpm" ^
+    --config-name="unet_small.yaml" ^
+    model.image_size=32 ^
+    model.timesteps=1000 ^
+    model.save_every=10000 ^
+    model.diffusion_model.dim=152 ^
+    model.diffusion_model.dim_mults=[1,2,2,2] ^
+    model.train_ds.name="cifar10" ^
+    model.train_ds.split="train" ^
+    model.train_ds.batch_size=128 ^
+    model.optim.lr=0.0002 ^
+    trainer.max_epochs=5 ^
+    trainer.strategy=null ^
+    exp_manager.name="DDPM" ^
+    exp_manager.exp_dir="CIFAR-Experiments" ^
+    exp_manager.create_wandb_logger=True ^
+    exp_manager.wandb_logger_kwargs.name="DDPM" ^
+    exp_manager.wandb_logger_kwargs.project="CIFAR-DDPM" ^
     exp_manager.wandb_logger_kwargs.entity="smajumdar"
     
     

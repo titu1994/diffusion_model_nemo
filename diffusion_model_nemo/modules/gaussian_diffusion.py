@@ -132,20 +132,13 @@ class GaussianDiffusion(AbstractDiffusionProcess):
 
     @torch.no_grad()
     def p_sample(self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor):
-        # betas_t = self.extract(self.betas, t, x.shape)
-        # sqrt_one_minus_alphas_cumprod_t = self.extract(self.sqrt_one_minus_alphas_cumprod, t, x.shape)
-        # sqrt_recip_alphas_t = self.extract(self.sqrt_recip_alphas, t, x.shape)
         B = x.size(0)
 
-        # model_mean = sqrt_recip_alphas_t * (x - betas_t * model(x, t) / sqrt_one_minus_alphas_cumprod_t)
         model_mean, _, model_log_variance = self.p_mean_variance(model, x=x, t=t)
 
         # no noise when t == 0
         nonzero_mask = (1 - (t == 0).float()).reshape(B, *((1,) * (len(x.shape) - 1)))
         noise = torch.randn_like(x)
-        # posterior_variance_t = self.extract(self.posterior_variance, t, x.shape)
-        # Algorithm 2 line 4:
-        # return model_mean + torch.sqrt(posterior_variance_t) * noise
 
         # Algorithm 2 line 4 (after clipping reformulation):
         return model_mean + nonzero_mask * torch.exp(0.5 * model_log_variance) * noise

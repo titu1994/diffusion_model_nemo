@@ -36,6 +36,8 @@ def sigmoid_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02):
 
 
 class AbstractDiffusionProcess(ABC, torch.nn.Module):
+    """ Abstract Diffusion Process which provides common interface to common implementations """
+
     def __init__(self, timesteps, schedule_name, schedule_cfg=None):
         super().__init__()
         self.timesteps = timesteps

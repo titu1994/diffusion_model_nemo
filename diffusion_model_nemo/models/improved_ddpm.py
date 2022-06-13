@@ -22,9 +22,6 @@ class ImprovedDDPM(DDPM):
     def __init__(self, cfg: DictConfig, trainer: Trainer = None):
         super().__init__(cfg, trainer=trainer)
 
-        # self.diffusion_model = instantiate(self.cfg.diffusion_model)
-        # self.sampler = instantiate(self.cfg.sampler)  # type: AbstractDiffusionProcess
-        # self.loss = instantiate(self.cfg.loss)
         self.vb_loss = instantiate(self.cfg.vb_loss)
 
     @property
