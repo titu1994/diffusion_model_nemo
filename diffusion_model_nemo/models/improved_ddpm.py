@@ -85,15 +85,3 @@ class ImprovedDDPM(DDPM):
             self._save_image_step(batch_size=batch_size, step=self.trainer.global_step)
 
         return total_loss
-
-    # def sample(self, batch_size: int, image_size: int):
-    #     return self.forward(batch_size=batch_size, image_size=image_size)
-    #
-    # def interpolate(self, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.5, **kwargs):
-    #     assert x1.ndim == 4, f"x1 is not a batch of tensors ! Given shape {x1.shape}"
-    #     assert x2.ndim == 4, f"x2 is not a batch of tensors ! Given shape {x2.shape}"
-    #     x1 = x1.to(self.device)
-    #     x2 = x2.to(self.device)
-    #
-    #     imgs = self.sampler.interpolate(self.diffusion_model, x1=x1, x2=x2, t=t, lambd=lambd)
-    #     return imgs

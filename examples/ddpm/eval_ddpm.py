@@ -52,6 +52,13 @@ def main(cfg: EvalConfig):
     if cfg.seed is not None:
         seed_everything(cfg.seed)
 
+
+    # Change sampler
+    sampler_cfg = model.cfg.sampler
+    sampler_cfg._target_ = "diffusion_model_nemo.modules.GeneralizedGaussianDiffusion"
+    model.change_sampler(sampler_cfg)
+
+
     # Compute samples
     samples = model.sample(batch_size=cfg.batch_size, image_size=cfg.image_size)
 

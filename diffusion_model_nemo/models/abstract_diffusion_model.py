@@ -113,3 +113,8 @@ class AbstractDiffusionModel(ModelPT):
 
     def list_available_models(cls) -> Optional[PretrainedModelInfo]:
         return None
+
+    def change_sampler(self, sampler_cfg: DictConfig):
+        self.sampler = instantiate(sampler_cfg)  # type: AbstractDiffusionProcess
+        self.cfg.sampler = sampler_cfg
+        self.cfg = self.cfg  # update PTL config

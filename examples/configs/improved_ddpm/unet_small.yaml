@@ -25,7 +25,7 @@ model:
 
     # Additional arguments
     dim_mults: [1, 2, 4, 8]
-    resnet_block_order: 'conv_bn_relu'
+    resnet_block_order: 'bn_act_conv'
     resnet_block_groups: 8
     use_convnext: False
     convnext_mult: 2
