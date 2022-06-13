@@ -20,9 +20,15 @@ python eval_ddpm.py ^
 
 @dataclass
 class EvalConfig:
+    # DDPM Config
     model_path: str = "DDPM.nemo"
-    batch_size: int = 1
+    batch_size: int = 32
     image_size: int = -1
+
+    # DDIM Config
+    use_ddim_sampler: bool = True
+    ddim_eta: float = 0.0  # 0 = DDIM mode, 1 = DDPM mode
+    ddim_timesteps: int = 100  # DDIM requires much smaller number of steps than DDPM; -1 uses original timesteps
 
     output_dir: str = "samples"
     add_timestamp: bool = True
@@ -34,6 +40,21 @@ class EvalConfig:
     fps: int = 30
 
     seed: Optional[int] = None
+
+
+def maybe_use_ddim_sampler(model: DDPM, cfg: EvalConfig):
+
+    # Check if user wants DDIM sampling
+    if cfg.use_ddim_sampler:
+        # Change sampler
+        sampler_cfg = model.cfg.sampler
+        with open_dict(sampler_cfg):
+            sampler_cfg._target_ = "diffusion_model_nemo.modules.GeneralizedGaussianDiffusion"
+            sampler_cfg.eta = cfg.ddim_eta
+            sampler_cfg.ddim_timesteps = cfg.ddim_timesteps
+
+            model.change_sampler(sampler_cfg)
+    return
 
 
 @hydra_runner(config_path=None, config_name="EvalConfig", schema=EvalConfig)
@@ -52,14 +73,11 @@ def main(cfg: EvalConfig):
     if cfg.seed is not None:
         seed_everything(cfg.seed)
 
-    # Change sampler
-    sampler_cfg = model.cfg.sampler
-    sampler_cfg._target_ = "diffusion_model_nemo.modules.GeneralizedGaussianDiffusion"
-    model.change_sampler(sampler_cfg)
+    # Maybe use DDIM sampler
+    maybe_use_ddim_sampler(model, cfg)
 
     # Compute samples
     samples = model.sample(batch_size=cfg.batch_size, image_size=cfg.image_size)
-    # print(samples[0:3][0])
 
     results_dir = cfg.get('output_dir')
     results_folder = Path(results_dir).absolute()
@@ -72,7 +90,10 @@ def main(cfg: EvalConfig):
 
     for result_idx in range(cfg.batch_size):
         if not cfg.show_diffusion:
-            result_path = str(results_folder / f"sample_{result_idx + 1}.png")
+            if cfg.use_ddim_sampler:
+                result_path = str(results_folder / f"sample_{result_idx + 1}_ddim_timesteps_{cfg.ddim_timesteps}.png")
+            else:
+                result_path = str(results_folder / f"sample_{result_idx + 1}.png")
             result = samples[-1][result_idx]
             torchvision.utils.save_image(result, result_path)
         else:

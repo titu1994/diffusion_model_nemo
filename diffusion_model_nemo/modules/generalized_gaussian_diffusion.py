@@ -24,6 +24,7 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
         schedule_cfg: Optional[DictConfig] = None,
         objective: str = "pred_noise",
         eta: float = 0.0,
+        ddim_timesteps: int = -1
     ):
         super().__init__(
             timesteps=timesteps, schedule_name=schedule_name, schedule_cfg=schedule_cfg, objective=objective
@@ -33,6 +34,8 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
             raise ValueError(f"`eta` must be a value in [0, 1]. 0 = DDIM and 1 = DDPM mode")
 
         self.eta = eta
+        self.ddim_timesteps = ddim_timesteps if ddim_timesteps > 0 else self.timesteps
+
         # Recompute for all subclasses
         self.compute_constants(self.timesteps)
 
@@ -93,7 +96,7 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
 
     # # Algorithm 2 (including returning all images)
     @torch.no_grad()
-    def p_sample_loop(self, model, shape, use_tqdm=True):
+    def p_sample_loop(self, model, shape, use_tqdm=True, img=None):
         device = next(model.parameters()).device
 
         b = shape[0]
@@ -103,16 +106,19 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
         self.alphas_extended = (1. - self.betas_extended)
         self.alphas_extended_cumprod = self.alphas_extended.cumprod(dim=0)
 
-        sequence = list(range(0, self.timesteps))
+        stride = self.timesteps // self.ddim_timesteps
+        sequence = list(range(0, self.timesteps, stride))
         sequence_next = [-1] + sequence[:-1]
 
         # start from pure noise (for each example in the batch)
-        img = torch.randn(shape, device=device)
+        if img is None:
+            img = torch.randn(shape, device=device)
+
         imgs = []
         for i, j in tqdm(
             zip(reversed(sequence), reversed(sequence_next)),
             desc='Sampling loop time step',
-            total=self.timesteps,
+            total=len(sequence),
             disable=not use_tqdm,
         ):
             t = torch.full((b,), i, device=device, dtype=torch.long)
@@ -128,26 +134,5 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
         return self.p_sample_loop(model, shape=shape)
 
     @torch.no_grad()
-    def interpolate(self, model, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.5):
-        B = x1.size(0)
-        device = x1.device
-        t = utils.default(t, self.timesteps - 1)
-
-        if t >= self.timesteps:
-            raise ValueError(f"`t` must be < {self.timesteps} during interpolation")
-
-        assert x1.shape == x2.shape
-
-        t_batched = torch.stack([torch.tensor(t, device=device)] * B)
-        xt1, xt2 = map(lambda x: self.q_sample(x, t=t_batched), (x1, x2))
-
-        imgs = []
-
-        img = (1 - lambd) * xt1 + lambd * xt2
-        for i in tqdm(reversed(range(0, t)), desc='Interpolation sample time step', total=t):
-            img, x0_start = self.p_sample(model, img, torch.full((B,), i, device=device, dtype=torch.long))
-            # unnormalize image
-            img_cpu = (img.cpu() + 1) * 0.5
-            imgs.append(img_cpu)
-
-        return imgs
+    def interpolate(self, model, x: torch.Tensor, t: Optional[int] = None):
+        return self.p_sample_loop(model, x.shape, img=x)
