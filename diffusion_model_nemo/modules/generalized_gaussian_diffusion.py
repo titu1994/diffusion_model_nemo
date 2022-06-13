@@ -39,9 +39,6 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
     def generalized_predict_start_from_noise(self, x_t: torch.Tensor, t: torch.Tensor, noise: torch.Tensor):
         assert x_t.shape == noise.shape, f"{x_t.shape} != {noise.shape}"
         alphas_extended_cumprod = self.extract(self.alphas_extended_cumprod, t + 1, x_t.shape)  # equivalent to `at_next`
-        print(alphas_extended_cumprod, self.alphas_extended_cumprod.index_select(0, t.cpu() + 1).view(-1, 1, 1, 1))
-        print(self.alphas_extended_cumprod)
-
         return (x_t - noise * (1. - alphas_extended_cumprod).sqrt()) / alphas_extended_cumprod.sqrt()
 
     def p_mean_variance(
@@ -60,7 +57,7 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
             x_recon = model_output
 
         # x0_preds = x_recon
-        print(x_recon.mean())
+        x_recon.clamp_(-1.0, 1.0)
 
         # Equation 11 in the paper; reformulated to include clipping
         # Use our model (noise predictor) to predict the mean
@@ -72,7 +69,7 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
             return model_mean, None, posterior_log_variance
 
     @torch.no_grad()
-    def p_sample(self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor):
+    def p_sample(self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor, t_next: torch.Tensor):
         model_output = model(x, t)
 
         # model_mean = sqrt_recip_alphas_t * (x - betas_t * model(x, t) / sqrt_one_minus_alphas_cumprod_t)
@@ -81,17 +78,17 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
         )
 
         # Referring to https://github.com/ermongroup/ddim/blob/51cb290f83049e5381b09a4cc0389f16a4a02cc9/functions/denoising.py#L26
-        alphas_cumprod = self.extract(self.alphas_cumprod, t + 1, x.shape)  # equivalent to `at_next`
-        alphas_cumprod_prev = self.extract(self.alphas_cumprod_prev, t, x.shape)  # equivalent to `at`
+        alphas_cumprod = self.extract(self.alphas_extended_cumprod, t + 1, x.shape)  # equivalent to `at`
+        alphas_cumprod_next = self.extract(self.alphas_extended_cumprod, t_next + 1, x.shape)  # equivalent to `at_next`
 
         # Construct intermediates of equation (12) in https://arxiv.org/abs/2010.02502
         noise = torch.randn_like(x)
         c1 = self.eta * torch.sqrt(
-            (1.0 - alphas_cumprod_prev / alphas_cumprod) * (1.0 - alphas_cumprod) / (1.0 - alphas_cumprod_prev)
+            (1.0 - alphas_cumprod / alphas_cumprod_next) * (1.0 - alphas_cumprod_next) / (1.0 - alphas_cumprod)
         )  # predicted x0
-        c2 = torch.sqrt((1.0 - alphas_cumprod) - c1 ** 2)  # direction pointing to x_t
+        c2 = torch.sqrt((1.0 - alphas_cumprod_next) - c1 ** 2)  # direction pointing to x_t
 
-        xt_next = alphas_cumprod.sqrt() * x0_t + c1 * noise + c2 * model_output
+        xt_next = alphas_cumprod_next.sqrt() * x0_t + c1 * noise + c2 * model_output
         return xt_next, x0_t
 
     # # Algorithm 2 (including returning all images)
@@ -106,16 +103,21 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
         self.alphas_extended = (1. - self.betas_extended)
         self.alphas_extended_cumprod = self.alphas_extended.cumprod(dim=0)
 
+        sequence = list(range(0, self.timesteps))
+        sequence_next = [-1] + sequence[:-1]
+
         # start from pure noise (for each example in the batch)
         img = torch.randn(shape, device=device)
         imgs = []
-        for i in tqdm(
-            reversed(range(0, self.timesteps)),
+        for i, j in tqdm(
+            zip(reversed(sequence), reversed(sequence_next)),
             desc='Sampling loop time step',
             total=self.timesteps,
             disable=not use_tqdm,
         ):
-            img, x0_t = self.p_sample(model, img, torch.full((b,), i, device=device, dtype=torch.long))
+            t = torch.full((b,), i, device=device, dtype=torch.long)
+            t_next = torch.full((b,), j, device=device, dtype=torch.long)
+            img, x0_t = self.p_sample(model, img, t, t_next)
             # unnormalize image
             img_cpu = (img.cpu() + 1) * 0.5
             imgs.append(img_cpu)
