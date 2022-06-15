@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
 from typing import List, Dict, Optional, Union
@@ -9,10 +10,12 @@ from pathlib import Path
 import datetime
 from omegaconf import OmegaConf, DictConfig, open_dict
 from hydra.utils import instantiate
+from tqdm.auto import tqdm
 
 from diffusion_model_nemo.data.hf_vision_data import HFVisionDataset
 from diffusion_model_nemo.modules.diffusion_process import AbstractDiffusionProcess
-from diffusion_model_nemo.utils import num_to_groups
+from diffusion_model_nemo.loss.variational_bound_loss import VariationalBoundLoss
+from diffusion_model_nemo import utils
 
 from nemo.core import ModelPT, PretrainedModelInfo, typecheck
 from nemo.core.neural_types import NeuralType
@@ -98,7 +101,7 @@ class AbstractDiffusionModel(ModelPT):
 
         img_size = self.image_size
         milestone = step // self.save_and_sample_every
-        batches = num_to_groups(4, batch_size)
+        batches = utils.num_to_groups(4, batch_size)
         all_images_list = list(
             map(
                 lambda n: self.sampler.sample(self.diffusion_model, shape=[n, self.channels, img_size, img_size]),
@@ -120,3 +123,62 @@ class AbstractDiffusionModel(ModelPT):
         self.cfg = self.cfg  # update PTL config
 
         logging.info(f"Sampler changed to : \n{OmegaConf.to_yaml(sampler_cfg)}")
+
+    def calculate_bits_per_dimension(self, x_start: torch.Tensor, diffusion_model_fn, max_batch_size: int = 32):
+        # Implemented from https://github.com/hojonathanho/diffusion/blob/1e0dceb3b3495bbe19116a5e1b3596cd0706c543/diffusion_tf/diffusion_utils_2.py#L313
+        B, C, H, W = x_start.size()
+        T = self.timesteps
+
+        if max_batch_size > 0:
+            B = min(max_batch_size, B)
+
+        with torch.inference_mode():
+            x_start = x_start[:B]
+
+            terms_buffer = torch.zeros(B, T, device=x_start.device)
+            T_range = torch.arange(T, device=x_start.device).unsqueeze(0)
+            t_b = torch.full([B], fill_value=T, device=x_start.device, dtype=torch.long)
+            zero_tensor = torch.tensor(0.0, device=x_start.device)
+
+            for t in tqdm(range(T - 1, 0, -1), desc='Computing bits per dimension', total=T):
+                t_b = t_b * 0 + t
+
+                x_t = self.sampler.q_sample(x_start=x_start, t=t_b)
+                # calculating kl loss for calculating NLL in bits per dimension
+                true_mean, true_log_variance_clipped = self.sampler.q_posterior(x_start=x_start, x=x_t, t=t_b)
+                model_mean, _, model_log_variance, pred_x_start = self.sampler.p_mean_variance(
+                    diffusion_model_fn, x=x_t, t=t_b, return_pred_x_start=True
+                )
+                if model_log_variance.shape != model_mean.shape:
+                    model_log_variance = model_log_variance.expand(-1, *model_mean.size()[1:])
+
+                # Calculate VLB term at the current timestep
+                new_vals_b = VariationalBoundLoss.compute_variation_loss_terms(
+                    samples=x_start,
+                    model_mean=model_mean,
+                    model_log_variance=model_log_variance,
+                    true_mean=true_mean,
+                    true_log_variance_clipped=true_log_variance_clipped,
+                    t=t_b,
+                )
+
+                # MSE for progressive prediction loss
+                mask_bt = ((t_b.unsqueeze(-1)) == (T_range)).to(torch.float32)
+                terms_buffer = terms_buffer * (1.0 - mask_bt) + new_vals_b.unsqueeze(-1) * mask_bt
+
+                assert mask_bt.shape == terms_buffer.shape == torch.Size([B, T])
+
+            t_prior = torch.full([B], fill_value=T - 1, device=x_start.device, dtype=torch.long)
+            qt_mean, _, qt_log_variance = self.sampler.q_mean_variance(x_start=x_start, t=t_prior)
+            kl_prior = utils.normal_kl(mean1=qt_mean, logvar1=qt_log_variance, mean2=zero_tensor, logvar2=zero_tensor)
+            prior_bpd_b = utils.mean_flattened(kl_prior) / math.log(2.0)
+            total_bpd_b = torch.sum(terms_buffer, dim=1) + prior_bpd_b
+
+        # assert terms_buffer.shape == mse_buffer.shape == [B, T] and total_bpd_b.shape == prior_bpd_b.shape == [B]
+        result = {
+            'total_bpd': total_bpd_b,
+            'terms_bpd': terms_buffer,
+            'prior_bpd': prior_bpd_b,
+        }
+
+        return result

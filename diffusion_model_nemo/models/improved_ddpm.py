@@ -84,6 +84,9 @@ class ImprovedDDPM(DDPM):
 
             if self.cfg.get('compute_bpd', False):
                 log_dict = self.calculate_bits_per_dimension(x_start=samples, diffusion_model_fn=diffusion_model_fn)
+                for key in log_dict.keys():
+                    log_dict[key] = log_dict[key].mean()
+
                 self.log('total_bits_per_dimension', log_dict.pop('total_bpd'), prog_bar=True)
                 self.log_dict(log_dict)
 
