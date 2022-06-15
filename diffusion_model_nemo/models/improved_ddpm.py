@@ -75,14 +75,16 @@ class ImprovedDDPM(DDPM):
         self.log('simple_loss', simple_losses.detach())
         self.log('vb_losses', vb_losses.detach())
         self.log('learning_rate', self._optimizer.param_groups[0]['lr'])
+        self.log('global_step', self.trainer.global_step)
 
 
         # save generated images
         if self.trainer.global_step != 0 and self.trainer.global_step % self.save_and_sample_every == 0:
             self._save_image_step(batch_size=batch_size, step=self.trainer.global_step)
 
-            log_dict = self.calculate_bits_per_dimension(x_start=samples, diffusion_model_fn=diffusion_model_fn)
-            self.log('total_bits_per_dimension', log_dict.pop('total_bpd'), prog_bar=True)
-            self.log_dict(log_dict)
+            if self.cfg.get('compute_bpd', False):
+                log_dict = self.calculate_bits_per_dimension(x_start=samples, diffusion_model_fn=diffusion_model_fn)
+                self.log('total_bits_per_dimension', log_dict.pop('total_bpd'), prog_bar=True)
+                self.log_dict(log_dict)
 
         return total_loss

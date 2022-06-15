@@ -5,6 +5,7 @@ model:
   timesteps: 1000
   channels: 3
   save_every: 1000  # save images every this many steps
+  compute_bpd: true  # compute bits per dimension (quite slow, so increase save_every above to reduce the cost)
 
   train_ds:
     name: null
