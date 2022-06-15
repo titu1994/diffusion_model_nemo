@@ -28,6 +28,29 @@ class VariationalBoundLoss(Loss):
     def output_types(self) -> Optional[Dict[str, NeuralType]]:
         return {"loss": NeuralType(None, LossType()), "decoded_nll": NeuralType(None, LossType())}
 
+    @staticmethod
+    def compute_variation_loss_terms(
+        samples: torch.Tensor,
+        model_mean: torch.Tensor,
+        model_log_variance: torch.Tensor,
+        true_mean: torch.Tensor,
+        true_log_variance_clipped: torch.Tensor,
+        t: torch.Tensor,
+    ):
+
+        kl = utils.normal_kl(true_mean, true_log_variance_clipped, model_mean, model_log_variance)
+        kl = utils.mean_flattened(kl) * (1.0 / math.log(2.0))
+
+        decoder_nll = -utils.discretized_gaussian_log_likelihood(
+            samples, means=model_mean, log_scales=0.5 * model_log_variance
+        )
+        decoder_nll = utils.mean_flattened(decoder_nll) * (1.0 / math.log(2.0))
+
+        # at the first timestep return the decoder NLL, otherwise return KL(q(x_{t-1}|x_t,x_0) || p(x_{t-1}|x_t))
+        vb_losses = torch.where(t == 0, decoder_nll, kl)
+
+        return vb_losses
+
     @typecheck()
     def forward(
         self,
@@ -44,17 +67,14 @@ class VariationalBoundLoss(Loss):
         if self.detach_model_mean:
             model_mean = model_mean.detach()
 
-        kl = utils.normal_kl(true_mean, true_log_variance_clipped, model_mean, model_log_variance)
-        kl = utils.mean_flattened(kl) * (1.0 / math.log(2.0))
-
-        decoder_nll = -utils.discretized_gaussian_log_likelihood(
-            samples, means=model_mean, log_scales=0.5 * model_log_variance
+        vb_losses = self.loss_weight * self.compute_variation_loss_terms(
+            samples=samples,
+            model_mean=model_mean,
+            model_log_variance=model_log_variance,
+            true_mean=true_mean,
+            true_log_variance_clipped=true_log_variance_clipped,
+            t=t,
         )
-        decoder_nll = utils.mean_flattened(decoder_nll) * (1.0 / math.log(2.0))
-
-        # at the first timestep return the decoder NLL, otherwise return KL(q(x_{t-1}|x_t,x_0) || p(x_{t-1}|x_t))
-        vb_losses = torch.where(t == 0, decoder_nll, kl)
-        vb_losses = self.loss_weight * vb_losses
 
         if self._reduction == 'batch_mean':
             vb_losses = vb_losses.view(samples.size(0), -1).sum(-1)

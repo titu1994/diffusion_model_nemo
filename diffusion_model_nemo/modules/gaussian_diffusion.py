@@ -22,6 +22,7 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         schedule_name: str,
         schedule_cfg: Optional[DictConfig] = None,
         objective: str = "pred_noise",
+        class_conditional: bool = False
     ):
         super().__init__(timesteps=timesteps, schedule_name=schedule_name, schedule_cfg=schedule_cfg)
 
@@ -44,6 +45,9 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         assert objective in ['pred_noise', 'pred_x0']
         self.objective = objective
 
+        # set class conditioning support
+        self.use_class_conditioning = class_conditional
+
         self.compute_constants(timesteps)
 
     def compute_constants(self, timesteps):
@@ -63,6 +67,7 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - self.alphas_cumprod)
         self.sqrt_recip_alphas_cumprod = torch.sqrt(1.0 / self.alphas_cumprod)
         self.sqrt_recipm1_alphas_cumprod = torch.sqrt(1.0 / self.alphas_cumprod - 1)
+        self.log_one_minus_alphas_cumprod = torch.log(1. - self.alphas_cumprod)
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
         # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
@@ -73,6 +78,12 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         self.posterior_mean_coef2 = (
             (1.0 - self.alphas_cumprod_prev) * torch.sqrt(self.alphas) / (1.0 - self.alphas_cumprod)
         )
+
+    def q_mean_variance(self, x_start: torch.Tensor, t: torch.Tensor):
+        mean = x_start * self.extract(self.sqrt_alphas_cumprod, t, x_start.shape)
+        variance = self.extract(1. - self.alphas_cumprod, t, x_start.shape)
+        log_variance = self.extract(self.log_one_minus_alphas_cumprod, t, x_start.shape)
+        return mean, variance, log_variance
 
     def q_posterior(self, x_start: torch.Tensor, x: torch.Tensor, t: torch.Tensor):
         """
@@ -118,7 +129,7 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         else:
             x_recon = model_output
 
-        # Always clamp
+        # Clamp if needed
         x_recon.clamp_(-1.0, 1.0)
 
         # Equation 11 in the paper; reformulated to include clipping

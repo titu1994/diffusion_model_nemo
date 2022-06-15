@@ -25,6 +25,7 @@ class Unet(NeuralModule):
         resnet_block_order: str = 'bn_act_conv',
         dropout: Optional[float] = None,
         learned_variance: bool = False,
+        num_classes: Optional[int] = None,
     ):
         super().__init__()
 
@@ -110,6 +111,10 @@ class Unet(NeuralModule):
             output = [nn.Conv2d(dim, out_dim, kernel_size=1)]
         self.final_conv = nn.Sequential(block_klass(dim, dim), *output)
 
+        self.num_classes = num_classes
+        if self.num_classes is not None:
+            self.class_embed = nn.Embedding(self.num_classes + 1, embedding_dim=self.dim, padding_idx=self.num_classes)
+
     @property
     def input_types(self) -> Optional[Dict[str, NeuralType]]:
         return None
@@ -119,8 +124,12 @@ class Unet(NeuralModule):
         return None
 
     @typecheck()
-    def forward(self, x, time):
+    def forward(self, x, time, classes=None):
         x = self.init_conv(x)
+
+        if self.num_classes is not None:
+            print(classes.shape)
+            x = x + self.class_embed(classes)
 
         t = self.time_mlp(time) if utils.exists(self.time_mlp) else None
 

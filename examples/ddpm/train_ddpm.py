@@ -38,7 +38,7 @@ python train_ddpm.py ^
     --config-name="unet_small.yaml" ^
     model.image_size=32 ^
     model.timesteps=1000 ^
-    model.save_every=10000 ^
+    model.save_every=500 ^
     model.diffusion_model.dim=152 ^
     model.diffusion_model.dim_mults=[1,2,2,2] ^
     model.train_ds.name="cifar10" ^
@@ -47,6 +47,7 @@ python train_ddpm.py ^
     model.optim.lr=0.0002 ^
     trainer.max_epochs=5 ^
     trainer.strategy=null ^
+    +init_from_nemo_model="final_models/DDPM.nemo" ^
     exp_manager.name="DDPM" ^
     exp_manager.exp_dir="CIFAR-Experiments" ^
     exp_manager.create_wandb_logger=True ^

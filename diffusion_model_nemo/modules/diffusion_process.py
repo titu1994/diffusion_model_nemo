@@ -37,6 +37,7 @@ def sigmoid_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02):
 
 class AbstractDiffusionProcess(ABC, torch.nn.Module):
     """ Abstract Diffusion Process which provides common interface to common implementations """
+    use_class_conditioning: bool = False
 
     def __init__(self, timesteps, schedule_name, schedule_cfg=None):
         super().__init__()
@@ -47,6 +48,10 @@ class AbstractDiffusionProcess(ABC, torch.nn.Module):
 
     @abstractmethod
     def compute_constants(self, timesteps):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def q_mean_variance(self, x_start: torch.Tensor, t: torch.Tensor):
         raise NotImplementedError()
 
     @abstractmethod
