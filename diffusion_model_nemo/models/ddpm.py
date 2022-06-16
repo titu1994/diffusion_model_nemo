@@ -79,6 +79,37 @@ class DDPM(AbstractDiffusionModel):
 
         return loss
 
+    def test_step(self, batch, batch_nb):
+        device = next(self.parameters()).device
+        batch_size = batch["pixel_values"].shape[0]
+        samples = batch["pixel_values"]  # x_start
+
+        if self.sampler.use_class_conditioning:
+            labels = batch["labels"]
+            diffusion_model_fn = partial(self.diffusion_model, classes=labels)
+        else:
+            diffusion_model_fn = self.diffusion_model
+
+        log_dict = self.calculate_bits_per_dimension(x_start=samples, diffusion_model_fn=diffusion_model_fn, max_batch_size=-1)
+        for key in log_dict.keys():
+            log_dict[key] = log_dict[key].sum()
+
+        log_dict['num_samples'] = torch.tensor(batch_size, dtype=torch.long)
+        return log_dict
+
+    def test_epoch_end(
+        self, outputs: Union[List[Dict[str, torch.Tensor]], List[List[Dict[str, torch.Tensor]]]]
+    ) -> Optional[Dict[str, Dict[str, torch.Tensor]]]:
+        total_samples = torch.sum(torch.stack([x['num_samples'] for x in outputs])).float()
+        total_bpd = torch.sum(torch.stack([x['total_bpd'] for x in outputs])) / total_samples
+        terms_bpd = torch.sum(torch.stack([x['terms_bpd'] for x in outputs])) / total_samples
+        prior_bpd = torch.sum(torch.stack([x['prior_bpd'] for x in outputs])) / total_samples
+
+        result = {'test_total_bpd (per channel)': total_bpd, 'test_terms_bpd': terms_bpd, 'test_prior_bpd': prior_bpd,
+                  'test_total_bpd': total_bpd * self.channels}
+        self.log_dict(result)
+
+        return result
 
     def sample(self, batch_size: int, image_size: int):
         with torch.inference_mode():

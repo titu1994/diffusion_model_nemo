@@ -81,9 +81,15 @@ class AbstractDiffusionModel(ModelPT):
 
     def setup_validation_data(self, val_data_config: Union[DictConfig, Dict]):
         self._update_dataset_config('validation', val_data_config)
+        # Ignore validation data loader
 
-        if 'shuffle' in val_data_config:
-            val_data_config['shuffle'] = False
+    def setup_test_data(self, test_data_config: Union[DictConfig, Dict]):
+        self._update_dataset_config('test', test_data_config)
+
+        if 'shuffle' in test_data_config:
+            test_data_config['shuffle'] = False
+
+        self._test_dl = self._setup_dataloader(test_data_config)
 
     @rank_zero_only
     def _prepare_output_dir(self):
@@ -147,7 +153,7 @@ class AbstractDiffusionModel(ModelPT):
                 # calculating kl loss for calculating NLL in bits per dimension
                 true_mean, true_log_variance_clipped = self.sampler.q_posterior(x_start=x_start, x=x_t, t=t_b)
                 model_mean, _, model_log_variance, pred_x_start = self.sampler.p_mean_variance(
-                    diffusion_model_fn, x=x_t, t=t_b, return_pred_x_start=True
+                    diffusion_model_fn, x=x_t, t=t_b, return_pred_x_start=True,
                 )
                 if model_log_variance.shape != model_mean.shape:
                     model_log_variance = model_log_variance.expand(-1, *model_mean.size()[1:])
@@ -168,11 +174,18 @@ class AbstractDiffusionModel(ModelPT):
 
                 assert mask_bt.shape == terms_buffer.shape == torch.Size([B, T])
 
+            # Compute prior
             t_prior = torch.full([B], fill_value=T - 1, device=x_start.device, dtype=torch.long)
             qt_mean, _, qt_log_variance = self.sampler.q_mean_variance(x_start=x_start, t=t_prior)
             kl_prior = utils.normal_kl(mean1=qt_mean, logvar1=qt_log_variance, mean2=zero_tensor, logvar2=zero_tensor)
             prior_bpd_b = utils.mean_flattened(kl_prior) / math.log(2.0)
+
+            # Compute total bpd
             total_bpd_b = torch.sum(terms_buffer, dim=1) + prior_bpd_b
+
+            # Total BPD due to data normalized
+            total_bpd_b_normalized = total_bpd_b * math.log(2.0)
+            total_bpd_b_normalized = -(total_bpd_b_normalized - math.log(128.0))
 
         # assert terms_buffer.shape == mse_buffer.shape == [B, T] and total_bpd_b.shape == prior_bpd_b.shape == [B]
         result = {

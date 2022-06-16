@@ -67,7 +67,7 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - self.alphas_cumprod)
         self.sqrt_recip_alphas_cumprod = torch.sqrt(1.0 / self.alphas_cumprod)
         self.sqrt_recipm1_alphas_cumprod = torch.sqrt(1.0 / self.alphas_cumprod - 1)
-        self.log_one_minus_alphas_cumprod = torch.log(1. - self.alphas_cumprod)
+        self.log_one_minus_alphas_cumprod = torch.log(1.0 - self.alphas_cumprod)
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
         # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
