@@ -183,10 +183,6 @@ class AbstractDiffusionModel(ModelPT):
             # Compute total bpd
             total_bpd_b = torch.sum(terms_buffer, dim=1) + prior_bpd_b
 
-            # Total BPD due to data normalized
-            total_bpd_b_normalized = total_bpd_b * math.log(2.0)
-            total_bpd_b_normalized = -(total_bpd_b_normalized - math.log(128.0))
-
         # assert terms_buffer.shape == mse_buffer.shape == [B, T] and total_bpd_b.shape == prior_bpd_b.shape == [B]
         result = {
             'total_bpd': total_bpd_b,
