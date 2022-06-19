@@ -146,7 +146,7 @@ class AbstractDiffusionModel(ModelPT):
             t_b = torch.full([B], fill_value=T, device=x_start.device, dtype=torch.long)
             zero_tensor = torch.tensor(0.0, device=x_start.device)
 
-            for t in tqdm(range(T - 1, 0, -1), desc='Computing bits per dimension', total=T):
+            for t in tqdm(range(T - 1, -1, -1), desc='Computing bits per dimension', total=T):
                 t_b = t_b * 0 + t
 
                 x_t = self.sampler.q_sample(x_start=x_start, t=t_b)
@@ -182,6 +182,7 @@ class AbstractDiffusionModel(ModelPT):
 
             # Compute total bpd
             total_bpd_b = torch.sum(terms_buffer, dim=1) + prior_bpd_b
+
 
         # assert terms_buffer.shape == mse_buffer.shape == [B, T] and total_bpd_b.shape == prior_bpd_b.shape == [B]
         result = {

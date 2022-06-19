@@ -100,8 +100,7 @@ class DDPM(AbstractDiffusionModel):
         terms_bpd = torch.sum(torch.stack([x['terms_bpd'] for x in outputs])) / total_samples
         prior_bpd = torch.sum(torch.stack([x['prior_bpd'] for x in outputs])) / total_samples
 
-        result = {'test_total_bpd (per channel)': total_bpd, 'test_terms_bpd': terms_bpd, 'test_prior_bpd': prior_bpd,
-                  'test_total_bpd': total_bpd * self.channels}
+        result = {'test_total_bpd': total_bpd, 'test_terms_bpd': terms_bpd, 'test_prior_bpd': prior_bpd}
         self.log_dict(result)
 
         return result

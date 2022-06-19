@@ -22,7 +22,7 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         schedule_name: str,
         schedule_cfg: Optional[DictConfig] = None,
         objective: str = "pred_noise",
-        class_conditional: bool = False
+        class_conditional: bool = False,
     ):
         super().__init__(timesteps=timesteps, schedule_name=schedule_name, schedule_cfg=schedule_cfg)
 
@@ -73,7 +73,9 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
         self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
-        self.posterior_log_variance_clipped = torch.log(torch.maximum(self.posterior_variance, torch.tensor(1e-20)))
+        self.posterior_log_variance_clipped = torch.log(
+            torch.cat([self.posterior_variance[1].unsqueeze(0), self.posterior_variance[1:]])
+        )
         self.posterior_mean_coef1 = self.betas * torch.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         self.posterior_mean_coef2 = (
             (1.0 - self.alphas_cumprod_prev) * torch.sqrt(self.alphas) / (1.0 - self.alphas_cumprod)
@@ -81,7 +83,7 @@ class GaussianDiffusion(AbstractDiffusionProcess):
 
     def q_mean_variance(self, x_start: torch.Tensor, t: torch.Tensor):
         mean = x_start * self.extract(self.sqrt_alphas_cumprod, t, x_start.shape)
-        variance = self.extract(1. - self.alphas_cumprod, t, x_start.shape)
+        variance = self.extract(1.0 - self.alphas_cumprod, t, x_start.shape)
         log_variance = self.extract(self.log_one_minus_alphas_cumprod, t, x_start.shape)
         return mean, variance, log_variance
 
