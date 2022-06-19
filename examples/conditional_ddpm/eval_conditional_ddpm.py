@@ -6,7 +6,7 @@ import datetime
 from pathlib import Path
 from pytorch_lightning import seed_everything
 
-from diffusion_model_nemo.models import DDPM
+from diffusion_model_nemo.models import ConditionalDDPM
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 
@@ -20,10 +20,11 @@ python eval_ddpm.py ^
 
 @dataclass
 class EvalConfig:
-    # DDPM Config
-    model_path: str = "DDPM.nemo"
+    # ConditionalDDPM Config
+    model_path: str = "ConditionalDDPM.nemo"
     batch_size: int = 32
     image_size: int = -1
+    label_id: Optional[int] = 0
 
     # DDIM Config
     use_ddim_sampler: bool = False
@@ -42,7 +43,7 @@ class EvalConfig:
     seed: Optional[int] = None
 
 
-def maybe_use_ddim_sampler(model: DDPM, cfg: EvalConfig):
+def maybe_use_ddim_sampler(model: ConditionalDDPM, cfg: EvalConfig):
 
     # Check if user wants DDIM sampling
     if cfg.use_ddim_sampler:
@@ -64,7 +65,8 @@ def main(cfg: EvalConfig):
 
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
 
-    model = DDPM.restore_from(cfg.model_path)  # type: DDPM
+    model = ConditionalDDPM.restore_from(cfg.model_path)  # type: ConditionalDDPM
+    model = model.eval()
 
     if cfg.image_size < 0:
         cfg.image_size = model.image_size
@@ -77,7 +79,9 @@ def main(cfg: EvalConfig):
     maybe_use_ddim_sampler(model, cfg)
 
     # Compute samples
-    samples = model.sample(batch_size=cfg.batch_size, image_size=cfg.image_size)
+    if cfg.label_id is not None:
+        logging.info(f'Selected class for sample generation: {cfg.label_id} ')
+    samples = model.sample(batch_size=cfg.batch_size, image_size=cfg.image_size, label=cfg.label_id)
 
     results_dir = cfg.get('output_dir')
     results_folder = Path(results_dir).absolute()
@@ -91,9 +95,16 @@ def main(cfg: EvalConfig):
     for result_idx in range(cfg.batch_size):
         if not cfg.show_diffusion:
             if cfg.use_ddim_sampler:
-                result_path = str(results_folder / f"sample_{result_idx + 1}_ddim_timesteps_{cfg.ddim_timesteps}.png")
+                result_path = str(results_folder / f"sample_{result_idx + 1}_ddim_timesteps_{cfg.ddim_timesteps}")
             else:
-                result_path = str(results_folder / f"sample_{result_idx + 1}.png")
+                result_path = str(results_folder / f"sample_{result_idx + 1}")
+
+            if cfg.label_id is not None:
+                result_path = result_path + f'_class_{cfg.label_id}'
+            else:
+                result_path = result_path + f'_unconditional'
+
+            result_path = result_path + '.png'
             result = samples[-1][result_idx]
             torchvision.utils.save_image(result, result_path)
         else:

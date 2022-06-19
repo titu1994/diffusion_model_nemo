@@ -4,6 +4,8 @@ model:
   image_size: ???
   timesteps: 1000
   channels: 3
+  num_classes: null
+
   save_every: 1000  # save images every this many steps
   compute_bpd: true  # compute bits per dimension (quite slow, so increase save_every above to reduce the cost)
 
@@ -22,7 +24,7 @@ model:
     input_dim: ${model.image_size}
     dim: 32
     channels: ${model.channels}  # input number of channels (3 for RGB)
-    num_classes: null  # number of classes to condition on
+    num_classes: ${model.num_classes}  # number of classes to condition on
 
     # Additional arguments
     dim_mults: [1, 2, 4, 8]
@@ -54,9 +56,6 @@ model:
       sigmoid:
         beta_start: 0.0001
         beta_end: 0.02
-
-    # conditioning flag
-    class_conditional: False
 
   loss:
     _target_: diffusion_model_nemo.loss.DiffusionLoss

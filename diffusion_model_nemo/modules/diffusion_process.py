@@ -73,7 +73,7 @@ class AbstractDiffusionProcess(ABC, torch.nn.Module):
 
     @abstractmethod
     @torch.no_grad()
-    def sample(self, model: torch.nn.Module, shape: List[int]):
+    def sample(self, model: torch.nn.Module, shape: List[int], device: torch.device = None):
         raise NotImplementedError()
 
     @torch.no_grad()

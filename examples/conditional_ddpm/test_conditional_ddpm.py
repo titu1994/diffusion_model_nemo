@@ -4,7 +4,7 @@ from omegaconf import OmegaConf, MISSING, open_dict
 from dataclasses import dataclass, is_dataclass
 from typing import Optional, List
 
-from diffusion_model_nemo.models import DDPM
+from diffusion_model_nemo.models import ConditionalDDPM
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 
@@ -12,7 +12,7 @@ from nemo.utils import logging
 # Test script
 
 # Fashion MNIST
-python test_ddpm.py ^
+python test_conditional_ddpm.py ^
     nemo_model=null ^
     pretrained_model=null ^
     cuda=-1 ^
@@ -23,8 +23,8 @@ python test_ddpm.py ^
     
 # CIFAR 10
 
-python test_ddpm.py ^
-    nemo_model=final_models/DDPM.nemo ^
+python test_conditional_ddpm.py ^
+    nemo_model=ConditionalDDPM.nemo ^
     pretrained_model=null ^
     cuda=-1 ^
     test_ds.name=cifar10 ^
@@ -78,9 +78,9 @@ def main(cfg: TestConfig):
 
     trainer = pl.Trainer(devices=device_id, accelerator='auto')
     if cfg.nemo_model:
-        model = DDPM.restore_from(cfg.nemo_model, trainer=trainer, map_location='cpu')
+        model = ConditionalDDPM.restore_from(cfg.nemo_model, trainer=trainer, map_location='cpu')
     else:
-        model = DDPM.from_pretrained(cfg.pretrained_model, trainer=trainer, map_location='cpu')
+        model = ConditionalDDPM.from_pretrained(cfg.pretrained_model, trainer=trainer, map_location='cpu')
 
     model.eval()
     model.freeze()

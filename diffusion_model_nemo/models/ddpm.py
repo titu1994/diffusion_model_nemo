@@ -40,23 +40,23 @@ class DDPM(AbstractDiffusionModel):
     def forward(self, x_t: torch.Tensor, t: torch.Tensor, classes: torch.Tensor = None):
         return self.diffusion_model(x_t, t)
 
+    def get_diffusion_model(self, batch: Dict):
+        diffusion_model_fn = self.forward
+        return diffusion_model_fn
+
     def training_step(self, batch, batch_nb):
         device = next(self.parameters()).device
         batch_size = batch["pixel_values"].shape[0]
         samples = batch["pixel_values"]  # x_start
 
-        if self.sampler.use_class_conditioning:
-            labels = batch["labels"]
-            diffusion_model_fn = partial(self.diffusion_model, classes=labels)
-        else:
-            diffusion_model_fn = self.diffusion_model
+        diffusion_model_fn = self.get_diffusion_model(batch)
 
         # Algorithm 1 line 3: sample t uniformally for every example in the batch
         t = torch.randint(0, self.timesteps, size=(batch_size,), device=device, dtype=torch.long)
         noise = torch.randn_like(samples)
 
         x_t = self.sampler.q_sample(x_start=samples, t=t, noise=noise)
-        model_output = diffusion_model_fn(x=x_t, time=t)
+        model_output = diffusion_model_fn(x_t=x_t, t=t)
 
         loss = self.loss(input=model_output, target=noise)
 
@@ -70,7 +70,7 @@ class DDPM(AbstractDiffusionModel):
             self._save_image_step(batch_size=batch_size, step=self.trainer.global_step)
 
             if self.cfg.get('compute_bpd', False):
-                log_dict = self.calculate_bits_per_dimension(x_start=samples, diffusion_model_fn=diffusion_model_fn)
+                log_dict = self.calculate_bits_per_dimension(x_start=samples, diffusion_model_fn=self.forward)
                 for key in log_dict.keys():
                     log_dict[key] = log_dict[key].mean()
 
@@ -84,11 +84,7 @@ class DDPM(AbstractDiffusionModel):
         batch_size = batch["pixel_values"].shape[0]
         samples = batch["pixel_values"]  # x_start
 
-        if self.sampler.use_class_conditioning:
-            labels = batch["labels"]
-            diffusion_model_fn = partial(self.diffusion_model, classes=labels)
-        else:
-            diffusion_model_fn = self.diffusion_model
+        diffusion_model_fn = self.get_diffusion_model(batch)
 
         log_dict = self.calculate_bits_per_dimension(x_start=samples, diffusion_model_fn=diffusion_model_fn, max_batch_size=-1)
         for key in log_dict.keys():
@@ -111,13 +107,15 @@ class DDPM(AbstractDiffusionModel):
 
         return result
 
-    def sample(self, batch_size: int, image_size: int):
+    def sample(self, batch_size: int, image_size: int, device: torch.device = None):
         with torch.inference_mode():
+            self.eval()
             shape = [batch_size, self.channels, image_size, image_size]
-            return self.sampler.sample(self.diffusion_model, shape=shape)
+            return self.sampler.sample(self.diffusion_model, shape=shape, device=device)
 
     def interpolate(self, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.5, **kwargs):
         with torch.inference_mode():
+            self.eval()
             assert x1.ndim == 4, f"x1 is not a batch of tensors ! Given shape {x1.shape}"
             assert x2.ndim == 4, f"x2 is not a batch of tensors ! Given shape {x2.shape}"
             x1 = x1.to(self.device)

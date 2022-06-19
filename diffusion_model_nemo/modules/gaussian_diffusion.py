@@ -156,8 +156,9 @@ class GaussianDiffusion(AbstractDiffusionProcess):
 
     # # Algorithm 2 (including returning all images)
     @torch.no_grad()
-    def p_sample_loop(self, model, shape, use_tqdm=True):
-        device = next(model.parameters()).device
+    def p_sample_loop(self, model, shape, device=None, use_tqdm=True):
+        if device is None:  # actual model
+            device = next(model.parameters()).device
 
         b = shape[0]
         # start from pure noise (for each example in the batch)
@@ -176,8 +177,8 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         return imgs
 
     @torch.no_grad()
-    def sample(self, model: torch.nn.Module, shape):
-        return self.p_sample_loop(model, shape=shape)
+    def sample(self, model: torch.nn.Module, shape, device=None):
+        return self.p_sample_loop(model, shape=shape, device=device)
 
     @torch.no_grad()
     def interpolate(self, model, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.5):

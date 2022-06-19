@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 from omegaconf import OmegaConf
 
-from diffusion_model_nemo.models import DDPM
+from diffusion_model_nemo.models import ConditionalDDPM
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
@@ -9,52 +9,58 @@ from nemo.utils.exp_manager import exp_manager
 """
 # Train script
 
+    model.diffusion_model.num_classes=10 ^
+    model.sampler.class_conditional=True ^
+
 # Fashion MNIST
-python train_ddpm.py ^
+python train_conditional_ddpm.py ^
     --config-path="../configs/ddpm" ^
     --config-name="unet_small.yaml" ^
     model.image_size=28 ^
     model.timesteps=1000 ^
     model.channels=1 ^
     model.save_every=500 ^
+    model.num_classes=10 ^
     model.diffusion_model.resnet_block_groups=8 ^
     model.diffusion_model.dim_mults=[1,2,4] ^
     model.train_ds.name="fashion_mnist" ^
     model.train_ds.split="train" ^
     trainer.max_epochs=5 ^
     trainer.strategy=null ^
-    exp_manager.name="DDPM" ^
+    exp_manager.name="ConditionalDDPM" ^
     exp_manager.exp_dir="Experiments" ^
     exp_manager.create_wandb_logger=True ^
-    exp_manager.wandb_logger_kwargs.name="DDPM" ^
-    exp_manager.wandb_logger_kwargs.project="DDPM" ^
+    exp_manager.wandb_logger_kwargs.name="ConditionalDDPM" ^
+    exp_manager.wandb_logger_kwargs.project="ConditionalDDPM" ^
     exp_manager.wandb_logger_kwargs.entity="smajumdar"
     
     
 # CIFAR 10
+
+    model.diffusion_model.num_classes=10 ^
     
     +init_from_nemo_model="final_models/DDPM.nemo" ^
 
-python train_ddpm.py ^
+python train_conditional_ddpm.py ^
     --config-path="../configs/ddpm" ^
     --config-name="unet_small.yaml" ^
     model.image_size=32 ^
     model.timesteps=1000 ^
     model.save_every=20 ^
+    model.num_classes=10 ^
     model.diffusion_model.dim=32 ^
     model.diffusion_model.dim_mults=[1,2,2,2] ^
-    model.sampler.class_conditional=True ^
     model.train_ds.name="cifar10" ^
     model.train_ds.split="train" ^
     model.train_ds.batch_size=128 ^
     model.optim.lr=0.0002 ^
     trainer.max_epochs=5 ^
     trainer.strategy=null ^
-    exp_manager.name="DDPM" ^
+    exp_manager.name="ConditionalDDPM" ^
     exp_manager.exp_dir="CIFAR-Experiments" ^
     exp_manager.create_wandb_logger=True ^
-    exp_manager.wandb_logger_kwargs.name="DDPM" ^
-    exp_manager.wandb_logger_kwargs.project="CIFAR-DDPM" ^
+    exp_manager.wandb_logger_kwargs.name="ConditionalDDPM" ^
+    exp_manager.wandb_logger_kwargs.project="ConditionalDDPM-CIFAR-DDPM" ^
     exp_manager.wandb_logger_kwargs.entity="smajumdar"
     
     
@@ -67,7 +73,7 @@ def main(cfg):
 
     trainer = pl.Trainer(**cfg.trainer)
     exp_manager(trainer, cfg.get("exp_manager", None))
-    model = DDPM(cfg=cfg.model, trainer=trainer)
+    model = ConditionalDDPM(cfg=cfg.model, trainer=trainer)
 
     # Initialize the weights of the model from another model, if provided via config
     model.maybe_init_from_pretrained_checkpoint(cfg)

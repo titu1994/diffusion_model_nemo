@@ -36,7 +36,7 @@ class Unet(NeuralModule):
         self.channels = channels
         self.learned_variance = learned_variance
 
-        dim = utils.default(dim, input_dim // 3 * 2)
+        # dim = utils.default(dim, input_dim // 3 * 2)
         self.dim = dim
         self.init_conv = nn.Conv2d(channels, dim, kernel_size=7, padding=3)
         self.resnet_block_order = resnet_block_order
@@ -128,8 +128,13 @@ class Unet(NeuralModule):
         x = self.init_conv(x)
 
         if self.num_classes is not None:
-            print(classes.shape)
-            x = x + self.class_embed(classes)
+            if classes is None:
+                # Use a vector of zeros for classes
+                classes = torch.ones(x.size(0), dtype=torch.long, device=x.device) * self.num_classes
+
+            cls_embed = self.class_embed(classes)
+            cls_embed = cls_embed.view(x.size(0), x.size(1), 1, 1)
+            x = x + cls_embed
 
         t = self.time_mlp(time) if utils.exists(self.time_mlp) else None
 
