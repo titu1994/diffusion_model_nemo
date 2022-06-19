@@ -80,7 +80,6 @@ class DDPM(AbstractDiffusionModel):
         return loss
 
     def test_step(self, batch, batch_nb):
-        device = next(self.parameters()).device
         batch_size = batch["pixel_values"].shape[0]
         samples = batch["pixel_values"]  # x_start
 
