@@ -20,7 +20,7 @@ infer_transform = Compose([transforms.ToTensor(), transforms.Lambda(lambda t: (t
 
 # define function
 
-def transforms(examples: dict):
+def get_image_key(examples: dict) -> str:
     # resolve the key for the data loader
     possible_keys = ['image', 'img']
     image_key = None
@@ -33,7 +33,21 @@ def transforms(examples: dict):
         raise ValueError(f"Could not retrieve image from the dataset. Tried {possible_keys}, which "
                          f"did not match dataset columns : {list(examples.keys())}")
 
+    return image_key
+
+def train_transforms(examples: dict):
+    image_key = get_image_key(examples)
+
     examples["pixel_values"] = [transform(image) for image in examples[image_key]]
+    del examples[image_key]
+
+    return examples
+
+
+def test_transforms(examples: dict):
+    image_key = get_image_key(examples)
+
+    examples["pixel_values"] = [infer_transform(image) for image in examples[image_key]]
     del examples[image_key]
 
     return examples
@@ -81,15 +95,20 @@ def get_reverse_transform(inverse_scale=True, uint=False):
 
 
 class HFVisionDataset(Dataset):
-    def __init__(self, name: str, split: str, cache_dir: str = None):
+    def __init__(self, name: str, split: str, cache_dir: str = None, mode='train'):
         super().__init__()
+
+        assert mode in ['train', 'test'], "Mode must be in train or test"
 
         has_auth_token = HfFolder.get_token() is not None
         dataset = load_dataset(name, split=split, cache_dir=cache_dir, use_auth_token=has_auth_token)
-        self.dataset = dataset.with_transform(transforms)
 
-        if 'label' in self.dataset.column_names:
-            self.dataset.remove_columns('label')
+        if mode == 'train':
+            self.dataset = dataset.with_transform(transforms)
+        elif mode == 'test':
+            self.dataset = dataset.with_transform(test_transforms)
+        else:
+            raise ValueError("Wrong mode")
 
     @property
     def output_types(self) -> Optional[Dict[str, NeuralType]]:

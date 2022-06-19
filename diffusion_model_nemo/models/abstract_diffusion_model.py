@@ -50,9 +50,9 @@ class AbstractDiffusionModel(ModelPT):
     def validation_step(self, batch, batch_nb):
         return None
 
-    def _setup_dataloader(self, cfg):
+    def _setup_dataloader(self, cfg, mode):
         if cfg.name is not None:
-            dataset = HFVisionDataset(name=cfg.name, split=cfg.split, cache_dir=cfg.get('cache_dir', None))
+            dataset = HFVisionDataset(name=cfg.name, split=cfg.split, cache_dir=cfg.get('cache_dir', None), mode=mode)
 
             dataloader = DataLoader(
                 dataset,
@@ -77,7 +77,7 @@ class AbstractDiffusionModel(ModelPT):
         if 'shuffle' in train_data_config:
             train_data_config['shuffle'] = True
 
-        self._train_dl = self._setup_dataloader(train_data_config)
+        self._train_dl = self._setup_dataloader(train_data_config, mode='train')
 
     def setup_validation_data(self, val_data_config: Union[DictConfig, Dict]):
         self._update_dataset_config('validation', val_data_config)
@@ -89,7 +89,7 @@ class AbstractDiffusionModel(ModelPT):
         if 'shuffle' in test_data_config:
             test_data_config['shuffle'] = False
 
-        self._test_dl = self._setup_dataloader(test_data_config)
+        self._test_dl = self._setup_dataloader(test_data_config, mode='test')
 
     @rank_zero_only
     def _prepare_output_dir(self):
