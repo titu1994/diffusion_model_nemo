@@ -87,6 +87,7 @@ class ConditionalDDPM(DDPM):
     ):
         with torch.inference_mode():
             self.eval()
+            device = next(self.parameters()).device
             assert x1.ndim == 4, f"x1 is not a batch of tensors ! Given shape {x1.shape}"
             assert x2.ndim == 4, f"x2 is not a batch of tensors ! Given shape {x2.shape}"
             x1 = x1.to(self.device)
