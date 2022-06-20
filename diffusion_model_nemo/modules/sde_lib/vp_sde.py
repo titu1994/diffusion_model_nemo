@@ -9,6 +9,8 @@ from diffusion_model_nemo.modules import sigmoid_beta_schedule
 
 
 class VPSDE(SDE):
+    sampling_epsilon = 1e-3
+
     def __init__(self, beta_min=0.1, beta_max=20, N=1000):
         """Construct a Variance Preserving SDE.
         Args:

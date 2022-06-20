@@ -3,3 +3,5 @@ torch
 tqdm
 nemo_toolkit[core]
 datasets
+scipy
+numpy

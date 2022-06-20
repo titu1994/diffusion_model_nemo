@@ -6,6 +6,7 @@ import torch
 
 class SDE(abc.ABC):
     """SDE abstract class. Functions are designed for a mini-batch of inputs."""
+    sampling_epsilon: float = None
 
     def __init__(self, N):
         """Construct an SDE.
@@ -14,6 +15,9 @@ class SDE(abc.ABC):
         """
         super().__init__()
         self.N = N
+
+        if self.sampling_epsilon is None:
+            raise ValueError("Sampling epsilon cannot be None ! Must be set as a class variable !")
 
     @property
     @abc.abstractmethod

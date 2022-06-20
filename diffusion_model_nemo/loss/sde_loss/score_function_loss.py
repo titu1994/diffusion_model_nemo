@@ -44,48 +44,49 @@ class SDEScoreFunctionLoss(Loss):
     def output_types(self) -> Optional[Dict[str, NeuralType]]:
         return {"loss": NeuralType(None, LossType())}
 
-    def resolve_score_function(self, model: torch.nn.Module):
-        if isinstance(self.sde, sde_lib.VPSDE) or isinstance(self.sde, sde_lib.subVPSDE):
+    @classmethod
+    def resolve_score_function(cls, model: torch.nn.Module, sde: 'sde_lib.SDE', continuous: bool = True):
+        if isinstance(sde, sde_lib.VPSDE) or isinstance(sde, sde_lib.subVPSDE):
 
             def score_fn(x, t):
                 # Scale neural network output by standard deviation and flip sign
-                if self.continuous or isinstance(self.sde, sde_lib.subVPSDE):
+                if continuous or isinstance(sde, sde_lib.subVPSDE):
                     # For VP-trained models, t=0 corresponds to the lowest noise level
                     # The maximum value of time embedding is assumed to 999 for
                     # continuously-trained models.
-                    labels = t * (self.sde.N - 1)  # t * 999
+                    labels = t * (sde.N - 1)  # t * 999
                     score = model(x, labels)
-                    _, std = self.sde.marginal_prob(torch.zeros_like(x), t)
+                    _, std = sde.marginal_prob(torch.zeros_like(x), t)
                 else:
                     # For VP-trained models, t=0 corresponds to the lowest noise level
-                    labels = t * (self.sde.N - 1)
+                    labels = t * (sde.N - 1)
                     score = model(x, labels)
 
-                    if not hasattr(self.sde, 'sqrt_1m_alphas_cumprod'):
-                        sqrt_1m_alphas_cumprod = torch.sqrt(1. - self.sde.alphas_cumprod)
-                        self.sde.sqrt_1m_alphas_cumprod = sqrt_1m_alphas_cumprod
+                    if not hasattr(sde, 'sqrt_1m_alphas_cumprod'):
+                        sqrt_1m_alphas_cumprod = torch.sqrt(1. - sde.alphas_cumprod)
+                        sde.sqrt_1m_alphas_cumprod = sqrt_1m_alphas_cumprod
 
-                    std = self.sde.sqrt_1m_alphas_cumprod.to(labels.device)[labels.long()]
+                    std = sde.sqrt_1m_alphas_cumprod.to(labels.device)[labels.long()]
 
                 score = -score / std[:, None, None, None]
                 return score
 
-        elif isinstance(self.sde, sde_lib.VESDE):
+        elif isinstance(sde, sde_lib.VESDE):
 
             def score_fn(x, t):
-                if self.continuous:
-                    labels = self.sde.marginal_prob(torch.zeros_like(x), t)[1]
+                if continuous:
+                    labels = sde.marginal_prob(torch.zeros_like(x), t)[1]
                 else:
                     # For VE-trained models, t=0 corresponds to the highest noise level
-                    labels = self.sde.T - t
-                    labels *= self.sde.N - 1
+                    labels = sde.T - t
+                    labels *= sde.N - 1
                     labels = torch.round(labels).long()
 
                 score = model(x, labels)
                 return score
 
         else:
-            raise NotImplementedError(f"SDE class {self.sde.__class__.__name__} not yet supported.")
+            raise NotImplementedError(f"SDE class {sde.__class__.__name__} not yet supported.")
 
         return score_fn
 
@@ -105,7 +106,7 @@ class SDEScoreFunctionLoss(Loss):
         else:
             reduce_op = lambda x, *args, **kwargs: x
 
-        score_fn = self.resolve_score_function(model)
+        score_fn = self.resolve_score_function(model, sde=self.sde, continuous=self.continuous)
         t = torch.rand(batch_size, device=samples.device) * (self.sde.T - self.eps) + self.eps
         noise = z = torch.randn_like(samples)
         mean, std = self.sde.marginal_prob(samples, t)

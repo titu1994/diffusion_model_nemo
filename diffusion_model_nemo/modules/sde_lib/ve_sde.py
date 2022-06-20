@@ -5,6 +5,8 @@ from diffusion_model_nemo.modules.sde_lib.sde_lib import SDE
 
 
 class VESDE(SDE):
+    sampling_epsilon = 1e-5
+
     def __init__(self, sigma_min=0.01, sigma_max=50, N=1000):
         """Construct a Variance Exploding SDE.
         Args:
