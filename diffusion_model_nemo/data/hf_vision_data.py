@@ -35,6 +35,7 @@ def get_image_key(examples: dict) -> str:
 
     return image_key
 
+
 def train_transforms(examples: dict):
     image_key = get_image_key(examples)
 
@@ -104,7 +105,7 @@ class HFVisionDataset(Dataset):
         dataset = load_dataset(name, split=split, cache_dir=cache_dir, use_auth_token=has_auth_token)
 
         if mode == 'train':
-            self.dataset = dataset.with_transform(transforms)
+            self.dataset = dataset.with_transform(train_transforms)
         elif mode == 'test':
             self.dataset = dataset.with_transform(test_transforms)
         else:
