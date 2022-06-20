@@ -17,8 +17,8 @@ python test_conditional_ddpm.py ^
     pretrained_model=null ^
     cuda=-1 ^
     test_ds.name=fashion_mnist ^
-    test_ds.split='test[:32]' ^
-    test_ds.batch_size=128
+    test_ds.split='test' ^
+    test_ds.batch_size=256
     
     
 # CIFAR 10
