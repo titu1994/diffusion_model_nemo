@@ -96,7 +96,7 @@ class SDEScoreFunctionLoss(Loss):
             raise RuntimeWarning("Must set the SDE solver via `update_sde()` !")
 
         batch_size = x_start.size(0)
-        t = t * (self.sde.TV - self.eps) + self.eps
+        t = t * (self.sde.T - self.eps) + self.eps
         z = noise
 
         if self._reduction == 'batch_mean':
