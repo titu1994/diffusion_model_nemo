@@ -96,8 +96,9 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
 
     # # Algorithm 2 (including returning all images)
     @torch.no_grad()
-    def p_sample_loop(self, model, shape, use_tqdm=True, img=None):
-        device = next(model.parameters()).device
+    def p_sample_loop(self, model, shape, use_tqdm=True, img=None, device=None):
+        if device is None:
+            device = next(model.parameters()).device
 
         b = shape[0]
 
@@ -130,8 +131,9 @@ class GeneralizedGaussianDiffusion(GaussianDiffusion):
         return imgs
 
     @torch.no_grad()
-    def sample(self, model: torch.nn.Module, shape):
-        return self.p_sample_loop(model, shape=shape)
+    def sample(self, model: torch.nn.Module, shape, device: torch.device = None):
+        with torch.inference_mode():
+            return self.p_sample_loop(model, shape=shape, device=device)
 
     @torch.no_grad()
     def interpolate(self, model, x: torch.Tensor, t: Optional[int] = None):

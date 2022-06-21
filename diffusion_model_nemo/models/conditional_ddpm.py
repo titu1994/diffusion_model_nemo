@@ -66,6 +66,10 @@ class ConditionalDDPM(DDPM):
 
         return diffusion_model_fn
 
+    def change_sampler(self, sampler_cfg: DictConfig):
+        super().change_sampler(sampler_cfg)
+        self.sampler.use_class_conditioning = True
+
     def sample(self, batch_size: int, image_size: int, label=None):
         with torch.inference_mode():
             self.eval()

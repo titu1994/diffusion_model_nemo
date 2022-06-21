@@ -10,7 +10,7 @@ from nemo.utils.exp_manager import exp_manager
 # Train script
 
 # Fashion MNIST
-python train_ddpm_vpsde.py ^
+python train_score_sde.py ^
     --config-path="../configs/score_sde/vp" ^
     --config-name="unet_small.yaml" ^
     model.image_size=28 ^
@@ -43,7 +43,6 @@ python train_ddpm.py ^
     model.save_every=20 ^
     model.diffusion_model.dim=32 ^
     model.diffusion_model.dim_mults=[1,2,2,2] ^
-    model.sampler.class_conditional=True ^
     model.train_ds.name="cifar10" ^
     model.train_ds.split="train" ^
     model.train_ds.batch_size=128 ^

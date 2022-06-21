@@ -6,7 +6,7 @@ import datetime
 from pathlib import Path
 from pytorch_lightning import seed_everything
 
-from diffusion_model_nemo.models import ConditionalDDPM
+from diffusion_model_nemo.models import ScoreSDE
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 
@@ -20,20 +20,18 @@ python eval_ddpm.py ^
 
 @dataclass
 class EvalConfig:
-    # ConditionalDDPM Config
-    model_path: str = "ConditionalDDPM.nemo"
+    # DDPM Config
+    model_path: str = "VPSDE-DDPM.nemo"
     batch_size: int = 32
     image_size: int = -1
-    label_id: Optional[int] = 0
 
-    # DDIM Config
-    use_ddim_sampler: bool = False
-    ddim_eta: float = 0.0  # 0 = DDIM mode, 1 = DDPM mode
-    ddim_timesteps: int = 100  # DDIM requires much smaller number of steps than DDPM; -1 uses original timesteps
+    # Predictor-Corrector Sampler modifications
+    pc_snr: Optional[float] = None
+    pc_predictor: Optional[str] = None  # [null, euler_maruyama, reverse_diffusion, ancestral_sampling]
+    pc_corrector: Optional[str] = None  # [null, langevin, ald]
 
     output_dir: str = "samples"
     add_timestamp: bool = True
-    save_grid: bool = True
 
     # animation settings
     show_diffusion: bool = False
@@ -44,19 +42,19 @@ class EvalConfig:
     seed: Optional[int] = None
 
 
-def maybe_use_ddim_sampler(model: ConditionalDDPM, cfg: EvalConfig):
+def update_predictor_corrector_sampler_cfg(model: ScoreSDE, cfg: EvalConfig):
+    sampler_cfg = model.cfg.sampler
 
-    # Check if user wants DDIM sampling
-    if cfg.use_ddim_sampler:
-        # Change sampler
-        sampler_cfg = model.cfg.sampler
-        with open_dict(sampler_cfg):
-            sampler_cfg._target_ = "diffusion_model_nemo.modules.GeneralizedGaussianDiffusion"
-            sampler_cfg.eta = cfg.ddim_eta
-            sampler_cfg.ddim_timesteps = cfg.ddim_timesteps
+    with open_dict(sampler_cfg):
+        if cfg.pc_snr is not None:
+            sampler_cfg.snr = cfg.pc_snr
+        if cfg.pc_predictor is not None:
+            sampler_cfg.predictor = cfg.pc_predictor
+        if cfg.pc_corrector is not None:
+            sampler_cfg.corrector = cfg.pc_corrector
 
-            model.change_sampler(sampler_cfg)
-    return
+    # Updating sampler config
+    model.change_sampler(sampler_cfg)
 
 
 @hydra_runner(config_path=None, config_name="EvalConfig", schema=EvalConfig)
@@ -66,8 +64,8 @@ def main(cfg: EvalConfig):
 
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
 
-    model = ConditionalDDPM.restore_from(cfg.model_path)  # type: ConditionalDDPM
-    model = model.eval()
+    model = ScoreSDE.restore_from(cfg.model_path)  # type: ScoreSDE
+    model.eval()
 
     if cfg.image_size < 0:
         cfg.image_size = model.image_size
@@ -76,13 +74,11 @@ def main(cfg: EvalConfig):
     if cfg.seed is not None:
         seed_everything(cfg.seed)
 
-    # Maybe use DDIM sampler
-    maybe_use_ddim_sampler(model, cfg)
+    # Update PC sampler
+    update_predictor_corrector_sampler_cfg(model, cfg)
 
     # Compute samples
-    if cfg.label_id is not None:
-        logging.info(f'Selected class for sample generation: {cfg.label_id} ')
-    samples = model.sample(batch_size=cfg.batch_size, image_size=cfg.image_size, label=cfg.label_id)
+    samples = model.sample(batch_size=cfg.batch_size, image_size=cfg.image_size)
 
     results_dir = cfg.get('output_dir')
     results_folder = Path(results_dir).absolute()
@@ -95,17 +91,7 @@ def main(cfg: EvalConfig):
 
     for result_idx in range(cfg.batch_size):
         if not cfg.show_diffusion:
-            if cfg.use_ddim_sampler:
-                result_path = str(results_folder / f"sample_{result_idx + 1}_ddim_timesteps_{cfg.ddim_timesteps}")
-            else:
-                result_path = str(results_folder / f"sample_{result_idx + 1}")
-
-            if cfg.label_id is not None:
-                result_path = result_path + f'_class_{cfg.label_id}'
-            else:
-                result_path = result_path + f'_unconditional'
-
-            result_path = result_path + '.png'
+            result_path = str(results_folder / f"sample_{result_idx + 1}.png")
             result = samples[-1][result_idx]
             torchvision.utils.save_image(result, result_path)
         else:

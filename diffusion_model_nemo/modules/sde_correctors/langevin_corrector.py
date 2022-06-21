@@ -35,4 +35,4 @@ class LangevinCorrector(Corrector):
         return x, x_mean
 
 
-LangevinCorrector.register_corector('ald')
+LangevinCorrector.register_corector('langevin')

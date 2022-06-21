@@ -117,31 +117,26 @@ class ScoreSDE(AbstractDiffusionModel):
     #
     #     return result
 
-    @rank_zero_only
-    def _save_image_step(self, batch_size, step):
-        if self._result_dir is None:
-            self._prepare_output_dir()
-
-        img_size = self.image_size
-        milestone = step // self.save_and_sample_every
-        batches = utils.num_to_groups(4, batch_size)
-        all_images_list = list(
-            map(
-                lambda n: self.sampler.sample(self.diffusion_model, shape=[n, self.channels, img_size, img_size]),
-                batches,
-            )
-        )
-        for idx, image_list in enumerate(all_images_list):
-            all_images = torch.cat(image_list, dim=0)
-            save_path = str(self._result_dir / f'sample-{milestone}-{idx + 1}.png')
-            save_image(all_images, save_path, nrow=6)
-            logging.info(f"Images saved at path : {save_path}")
-
     def sample(self, batch_size: int, image_size: int, device: torch.device = None):
         with torch.inference_mode():
             self.eval()
+
+            if device is None:
+                device = next(self.parameters()).device
+
             shape = [batch_size, self.channels, image_size, image_size]
             return self.sampler.sample(self.diffusion_model, shape=shape, device=device)
 
     def interpolate(self, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.5, **kwargs):
         raise NotImplementedError()
+
+    # Sampler modification
+    def change_sampler(self, sampler_cfg):
+        self.sampler = instantiate(sampler_cfg)  # type: PredictorCorrectorSampler
+        self.sampler.update_sde(self.sde)
+
+        self.cfg.sampler = sampler_cfg
+        self.cfg = self.cfg  # Update internal config
+
+        logging.info(f"Sampler config changed to : \n"
+                     f"{OmegaConf.to_yaml(sampler_cfg)}")
