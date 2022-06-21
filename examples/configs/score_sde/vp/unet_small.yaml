@@ -76,6 +76,8 @@ model:
   loss:
     _target_: diffusion_model_nemo.loss.SDEScoreFunctionLoss
     continuous: ${model.continuous}
+    likelihood_weighting: ${model.likelihood_weighting}
+    eps: 1e-5
     reduction: "mean"  # can be 'mean', 'sum', 'batch_mean' or 'none'
 
   optim:

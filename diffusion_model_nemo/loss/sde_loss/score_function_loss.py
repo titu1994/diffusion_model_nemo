@@ -100,7 +100,7 @@ class SDEScoreFunctionLoss(Loss):
         z = noise
 
         if self._reduction == 'batch_mean':
-            reduce_op = lambda x, *args, **kwargs: x.view(batch_size, -1).sum(-1).mean()
+            reduce_op = lambda x, *args, **kwargs: x.view(batch_size, -1).sum(-1)
         elif self.reduction == 'mean':
             reduce_op = lambda x, *args, **kwargs: torch.mean(x, *args, **kwargs)
         elif self.reduction == 'sum':
