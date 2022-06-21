@@ -9,7 +9,7 @@ model:
   num_classes: null
 
   save_every: 1000  # save images every this many steps
-  compute_bpd: false  # compute bits per dimension (quite slow, so increase save_every above to reduce the cost)
+  compute_bpd: true  # compute bits per dimension (quite slow, so increase save_every above to reduce the cost)
 
   train_ds:
     name: null
@@ -79,6 +79,14 @@ model:
     likelihood_weighting: ${model.likelihood_weighting}
     eps: 1e-5
     reduction: "mean"  # can be 'mean', 'sum', 'batch_mean' or 'none'
+
+  likelihood_estimate:
+    _target_: diffusion_model_nemo.modules.LikelihoodEstimate
+    hutchinson_type: 'rademacher'  # can be rademacher or gaussian
+    method: RK45  # can be any supported ivp solver
+    rtol: 1e-5
+    atol: 1e-5
+    eps: 1e-5
 
   optim:
     name: adamw

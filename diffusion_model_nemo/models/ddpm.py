@@ -67,6 +67,7 @@ class DDPM(AbstractDiffusionModel):
 
         # save generated images
         if self.trainer.global_step != 0 and self.trainer.global_step % self.save_and_sample_every == 0:
+            self.eval()
             self._save_image_step(batch_size=batch_size, step=self.trainer.global_step)
 
             if self.cfg.get('compute_bpd', False):
