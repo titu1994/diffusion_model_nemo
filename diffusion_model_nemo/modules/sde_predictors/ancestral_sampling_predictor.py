@@ -43,3 +43,6 @@ class AncestralSamplingPredictor(Predictor):
             return self.vpsde_update_fn(x, t)
         else:
             raise ValueError(f"Could not resolve sde : `{self.sde.__name__}`")
+
+
+AncestralSamplingPredictor.register_predictor('ancestral_sampling')

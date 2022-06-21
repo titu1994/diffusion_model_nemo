@@ -41,4 +41,4 @@ class AnnealedLangevinDynamics(Corrector):
         return x, x_mean
 
 
-AnnealedLangevinDynamics.register_corector()
+AnnealedLangevinDynamics.register_corector('ald')

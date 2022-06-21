@@ -91,11 +91,13 @@ class SDEScoreFunctionLoss(Loss):
         return score_fn
 
     @typecheck()
-    def forward(self, model: torch.nn.Module, samples: torch.Tensor):
+    def forward(self, model: torch.nn.Module, x_start: torch.Tensor, t: torch.Tensor, noise: torch.Tensor):
         if self.sde is None:
             raise RuntimeWarning("Must set the SDE solver via `update_sde()` !")
 
-        batch_size = samples.size(0)
+        batch_size = x_start.size(0)
+        t = t * (self.sde.T - self.eps) + self.eps
+        z = noise
 
         if self._reduction == 'batch_mean':
             reduce_op = lambda x, *args, **kwargs: x.view(batch_size, -1).sum(-1).mean()
@@ -107,9 +109,7 @@ class SDEScoreFunctionLoss(Loss):
             reduce_op = lambda x, *args, **kwargs: x
 
         score_fn = self.resolve_score_function(model, sde=self.sde, continuous=self.continuous)
-        t = torch.rand(batch_size, device=samples.device) * (self.sde.T - self.eps) + self.eps
-        noise = z = torch.randn_like(samples)
-        mean, std = self.sde.marginal_prob(samples, t)
+        mean, std = self.sde.marginal_prob(x_start, t)
         perturbed_data = mean + std[:, None, None, None] * noise
         score = score_fn(perturbed_data, t)
 
@@ -117,7 +117,7 @@ class SDEScoreFunctionLoss(Loss):
             losses = torch.square(score * std[:, None, None, None] + z)
             losses = reduce_op(losses.reshape(losses.shape[0], -1), dim=-1)
         else:
-            _, diffusion = self.sde.sde(torch.zeros_like(samples), t) ** 2
+            _, diffusion = self.sde.sde(torch.zeros_like(x_start), t) ** 2
             losses = torch.square(score + z / std[:, None, None, None])
             losses = reduce_op(losses.reshape(losses.shape[0], -1), dim=-1) * diffusion
 

@@ -15,7 +15,7 @@ class PredictorCorrectorSampler(torch.nn.Module):
         snr: float,
         n_steps: int = 1,
         probability_flow: bool = False,
-        continuous: bool = False,
+        continuous: bool = True,
         denoise: bool = True,
         eps: float = None,
     ):
@@ -80,13 +80,19 @@ class PredictorCorrectorSampler(torch.nn.Module):
                 x, x_mean = corrector_update_fn(x, vec_t, model=model)
                 x, x_mean = predictor_update_fn(x, vec_t, model=model)
 
+        # denormalize image
+        x = (x.cpu() + 1.) * 0.5  # [-1, 1] -> [0, 1]
+
         nfe = self.sde.N * (self.n_steps + 1)
         if self.denoise:
             return x_mean, nfe
         else:
             return x, nfe
 
-    def sample(self, model: torch.nn.Module, shape: List[int], device: torch.device) -> (torch.Tensor, int):
+    def sample(self, model: torch.nn.Module, shape: List[int], device: torch.device = None) -> (torch.Tensor, int):
+        if device is None:
+            device = next(model.parameters()).device
+
         return self.forward(model=model, shape=shape, device=device)
 
     @staticmethod

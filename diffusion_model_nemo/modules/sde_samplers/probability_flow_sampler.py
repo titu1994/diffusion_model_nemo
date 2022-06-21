@@ -88,6 +88,9 @@ class ProbabilityFlowSampler(torch.nn.Module):
         if self.denoise:
             x = self.denoise_update_fn(model, self.sde, x, eps)
 
+        # denormalize image
+        x = (x.cpu() + 1.) * 0.5  # [-1, 1] -> [0, 1]
+
         return x, nfe
 
     def sample(self, model: torch.nn.Module, shape: List[int], device: torch.device) -> (torch.Tensor, int):
