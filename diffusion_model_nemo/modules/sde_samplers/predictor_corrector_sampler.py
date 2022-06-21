@@ -1,9 +1,17 @@
 import torch
 import functools
 from typing import List, Optional
+from tqdm.auto import tqdm
 
 from diffusion_model_nemo.modules import sde_lib
-from diffusion_model_nemo.modules import Predictor, NonePredictor, Corrector, NoneCorrector
+from diffusion_model_nemo.modules import (
+    Predictor,
+    NonePredictor,
+    get_predictor,
+    Corrector,
+    NoneCorrector,
+    get_corrector,
+)
 from diffusion_model_nemo.loss import SDEScoreFunctionLoss
 
 
@@ -47,7 +55,14 @@ class PredictorCorrectorSampler(torch.nn.Module):
     def update_sde(self, sde: sde_lib.SDE):
         self.sde = sde  # type: sde_lib.SDE
 
-    def forward(self, model: torch.nn.Module, shape: List[int], device: torch.device) -> (torch.Tensor, int):
+    def forward(
+        self,
+        model: torch.nn.Module,
+        shape: List[int],
+        device: torch.device,
+        return_nfe: bool = True,
+        use_tqdm: bool = True,
+    ) -> (torch.Tensor, int):
         if self.sde is None:
             raise ValueError(f"Must explicitly set `update_sde(sde)` for this module prior to calling forward()")
 
@@ -57,53 +72,70 @@ class PredictorCorrectorSampler(torch.nn.Module):
             eps = self.eps
 
         # Create predictor & corrector update functions
-        predictor_update_fn = functools.partial(self.prepare_predictor_fn,
-                                                sde=self.sde,
-                                                predictor=self.predictor,
-                                                probability_flow=self.probability_flow,
-                                                continuous=self.continuous)
-        corrector_update_fn = functools.partial(self.prepare_corrector_fn,
-                                                sde=self.sde,
-                                                corrector=self.corrector,
-                                                continuous=self.continuous,
-                                                snr=self.snr,
-                                                n_steps=self.n_steps)
+        predictor_update_fn = functools.partial(
+            self.prepare_predictor_fn,
+            sde=self.sde,
+            predictor=self.predictor,
+            probability_flow=self.probability_flow,
+            continuous=self.continuous,
+        )
+        corrector_update_fn = functools.partial(
+            self.prepare_corrector_fn,
+            sde=self.sde,
+            corrector=self.corrector,
+            continuous=self.continuous,
+            snr=self.snr,
+            n_steps=self.n_steps,
+        )
 
         with torch.inference_mode():
             # Initial sample
             x = self.sde.prior_sampling(shape).to(device)
             timesteps = torch.linspace(self.sde.T, eps, self.sde.N, device=device)
+            imgs = []
 
-            for i in range(self.sde.N):
+            for i in tqdm(
+                range(self.sde.N),
+                desc='Sampling loop time step',
+                total=self.sde.N,
+                disable=not use_tqdm,
+            ):
                 t = timesteps[i]
                 vec_t = torch.ones(shape[0], device=t.device) * t
                 x, x_mean = corrector_update_fn(x, vec_t, model=model)
                 x, x_mean = predictor_update_fn(x, vec_t, model=model)
 
-        # denormalize image
-        x = (x.cpu() + 1.) * 0.5  # [-1, 1] -> [0, 1]
+                # denormalize image
+                if self.denoise:
+                    img_cpu = (x_mean.cpu() + 1.0) * 0.5
+                else:
+                    img_cpu = (x.cpu() + 1.0) * 0.5
+                imgs.append(img_cpu)
 
         nfe = self.sde.N * (self.n_steps + 1)
-        if self.denoise:
-            return x_mean, nfe
-        else:
-            return x, nfe
 
-    def sample(self, model: torch.nn.Module, shape: List[int], device: torch.device = None) -> (torch.Tensor, int):
+        if return_nfe:
+            return (imgs, nfe)
+        else:
+            return imgs
+
+    def sample(
+        self, model: torch.nn.Module, shape: List[int], device: torch.device = None, return_nfe: bool = False
+    ) -> (torch.Tensor, int):
         if device is None:
             device = next(model.parameters()).device
 
-        return self.forward(model=model, shape=shape, device=device)
+        return self.forward(model=model, shape=shape, device=device, return_nfe=return_nfe)
 
     @staticmethod
     def prepare_predictor_fn(
-            x: torch.Tensor,
-            t: torch.Tensor,
-            model: torch.nn.Module,
-            sde: 'sde_lib.SDE',
-            predictor: 'Predictor',
-            continuous: bool,
-            probability_flow: bool,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        model: torch.nn.Module,
+        sde: 'sde_lib.SDE',
+        predictor: Optional[str],
+        continuous: bool,
+        probability_flow: bool,
     ):
         """A wrapper tha configures and returns the update function of correctors."""
         score_fn = SDEScoreFunctionLoss.resolve_score_function(model=model, sde=sde, continuous=continuous)
@@ -112,20 +144,21 @@ class PredictorCorrectorSampler(torch.nn.Module):
             # Predictor-only sampler
             predictor_obj = NonePredictor(sde=sde, score_fn=score_fn, probability_flow=probability_flow)
         else:
+            predictor = get_predictor(predictor)
             predictor_obj = predictor(sde=sde, score_fn=score_fn, probability_flow=probability_flow)
 
         return predictor_obj.update_fn(x, t)
 
     @staticmethod
     def prepare_corrector_fn(
-            x: torch.Tensor,
-            t: torch.Tensor,
-            model: torch.nn.Module,
-            sde: 'sde_lib.SDE',
-            corrector: 'Corrector',
-            continuous: bool,
-            snr: float,
-            n_steps: int,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        model: torch.nn.Module,
+        sde: 'sde_lib.SDE',
+        corrector: Optional[str],
+        continuous: bool,
+        snr: float,
+        n_steps: int,
     ):
         """A wrapper tha configures and returns the update function of correctors."""
         score_fn = SDEScoreFunctionLoss.resolve_score_function(model=model, sde=sde, continuous=continuous)
@@ -134,6 +167,7 @@ class PredictorCorrectorSampler(torch.nn.Module):
             # Predictor-only sampler
             corrector_obj = NoneCorrector(sde=sde, score_fn=score_fn, snr=snr, n_steps=n_steps)
         else:
+            corrector = get_corrector(corrector)
             corrector_obj = corrector(sde=sde, score_fn=score_fn, snr=snr, n_steps=n_steps)
 
         return corrector_obj.update_fn(x, t)

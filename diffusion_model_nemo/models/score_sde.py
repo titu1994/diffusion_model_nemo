@@ -13,7 +13,7 @@ from hydra.utils import instantiate
 from tqdm.auto import tqdm
 
 from diffusion_model_nemo.models import AbstractDiffusionModel
-from diffusion_model_nemo.modules import sde_lib
+from diffusion_model_nemo.modules import sde_lib, PredictorCorrectorSampler
 from diffusion_model_nemo.loss import SDEScoreFunctionLoss
 from diffusion_model_nemo import utils
 
@@ -38,9 +38,11 @@ class ScoreSDE(AbstractDiffusionModel):
         self.sde = instantiate(sde_cfg)  # type: sde_lib.SDE
 
         # initialize the sampler
-        self.sampler = instantiate(self.cfg.sampler)
+        self.sampler = instantiate(self.cfg.sampler)  # type: PredictorCorrectorSampler
+        self.sampler.update_sde(self.sde)
 
         self.loss = instantiate(self.cfg.loss)  # type: SDEScoreFunctionLoss
+        self.loss.update_sde(self.sde)
 
     @property
     def input_types(self) -> Optional[Dict[str, NeuralType]]:
@@ -125,7 +127,7 @@ class ScoreSDE(AbstractDiffusionModel):
         batches = utils.num_to_groups(4, batch_size)
         all_images_list = list(
             map(
-                lambda n: self.sampler.sample(self.diffusion_model, shape=[n, self.channels, img_size, img_size])[0],
+                lambda n: self.sampler.sample(self.diffusion_model, shape=[n, self.channels, img_size, img_size]),
                 batches,
             )
         )

@@ -117,9 +117,9 @@ class SDEScoreFunctionLoss(Loss):
             losses = torch.square(score * std[:, None, None, None] + z)
             losses = reduce_op(losses.reshape(losses.shape[0], -1), dim=-1)
         else:
-            _, diffusion = self.sde.sde(torch.zeros_like(x_start), t) ** 2
+            g2 = self.sde.sde(torch.zeros_like(x_start), t)[1] ** 2
             losses = torch.square(score + z / std[:, None, None, None])
-            losses = reduce_op(losses.reshape(losses.shape[0], -1), dim=-1) * diffusion
+            losses = reduce_op(losses.reshape(losses.shape[0], -1), dim=-1) * g2
 
         loss = losses.mean()
 

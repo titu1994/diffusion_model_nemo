@@ -2,3 +2,4 @@ from diffusion_model_nemo.models.abstract_diffusion_model import AbstractDiffusi
 from diffusion_model_nemo.models.ddpm import DDPM
 from diffusion_model_nemo.models.improved_ddpm import ImprovedDDPM
 from diffusion_model_nemo.models.conditional_ddpm import ConditionalDDPM
+from diffusion_model_nemo.models.score_sde import ScoreSDE

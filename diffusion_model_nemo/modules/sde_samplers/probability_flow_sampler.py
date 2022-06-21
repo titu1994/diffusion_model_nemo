@@ -44,7 +44,12 @@ class ProbabilityFlowSampler(torch.nn.Module):
         self.sde = sde  # type: sde_lib.SDE
 
     def forward(
-        self, model: torch.nn.Module, shape: List[int], device: torch.device, noise: Optional[torch.Tensor] = None
+        self,
+        model: torch.nn.Module,
+        shape: List[int],
+        device: torch.device,
+        noise: Optional[torch.Tensor] = None,
+        return_nfe: bool = True,
     ) -> (torch.Tensor, int):
         """
         The probability flow ODE sampler with black-box ODE solver.
@@ -78,8 +83,14 @@ class ProbabilityFlowSampler(torch.nn.Module):
                 return drift.detach().cpu().numpy().reshape((-1,))
 
             # Black-box ODE solver for the probability flow ODE
-            solution = integrate.solve_ivp(ode_func, (self.sde.T, self.eps), x.detach().cpu().numpy().reshape((-1,)),
-                                           rtol=self.rtol, atol=self.atol, method=self.method)
+            solution = integrate.solve_ivp(
+                ode_func,
+                (self.sde.T, self.eps),
+                x.detach().cpu().numpy().reshape((-1,)),
+                rtol=self.rtol,
+                atol=self.atol,
+                method=self.method,
+            )
 
             nfe = solution.nfe
             x = torch.tensor(solution.y[:, -1]).reshape(shape).to(device=device, dtype=torch.float32)
@@ -89,12 +100,17 @@ class ProbabilityFlowSampler(torch.nn.Module):
             x = self.denoise_update_fn(model, self.sde, x, eps)
 
         # denormalize image
-        x = (x.cpu() + 1.) * 0.5  # [-1, 1] -> [0, 1]
+        x = (x.cpu() + 1.0) * 0.5  # [-1, 1] -> [0, 1]
 
-        return x, nfe
+        if return_nfe:
+            return x, nfe
+        else:
+            return x
 
-    def sample(self, model: torch.nn.Module, shape: List[int], device: torch.device) -> (torch.Tensor, int):
-        return self.forward(model=model, shape=shape, device=device)
+    def sample(
+        self, model: torch.nn.Module, shape: List[int], device: torch.device, return_nfe: bool = False
+    ) -> (torch.Tensor, int):
+        return self.forward(model=model, shape=shape, device=device, return_nfe=return_nfe)
 
     @staticmethod
     def denoise_update_fn(model: torch.nn.Module, sde: sde_lib.SDE, x: torch.Tensor, eps: float):

@@ -1,4 +1,4 @@
-name: "Score-SDE-UNet"
+name: "VPSDE-SDE-UNet"
 
 model:
   image_size: ???
@@ -32,7 +32,7 @@ model:
     dim_mults: [1, 2, 4, 8]
     with_time_emb: True
     resnet_block_order: 'bn_act_conv'  # can be bn_act_conv or conv_bn_relu
-    resnet_block_groups: 8
+    resnet_block_groups: 4
     use_convnext: False
     convnext_mult: 2
     out_dim: null
@@ -50,20 +50,20 @@ model:
       N: ${model.timesteps}
 
     subvpsde:
-       _target_: diffusion_model_nemo.modules.subVPSDE
+      _target_: diffusion_model_nemo.modules.subVPSDE
       beta_min: 0.1
       beta_max: 20.0
       N: ${model.timesteps}
 
     vesde:
-       _target_: diffusion_model_nemo.modules.VESDE
+      _target_: diffusion_model_nemo.modules.VESDE
       sigma_min: 0.01
       sigma_max: 50.0
       N: ${model.timesteps}
 
   sampler:
     _target_: diffusion_model_nemo.modules.PredictorCorrectorSampler
-    predictor: null  # can be [null, euler_maruyama, reverse_diffusion, ancestral_sampling]
+    predictor: euler_maruyama  # can be [null, euler_maruyama, reverse_diffusion, ancestral_sampling]
     corrector: null  # can be [null, langevin, ald]
     snr: 0.16
 
