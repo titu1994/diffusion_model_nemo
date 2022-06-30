@@ -1,3 +1,4 @@
+import torch
 import torchvision.utils
 from omegaconf import OmegaConf, open_dict
 from dataclasses import dataclass, is_dataclass
@@ -22,7 +23,7 @@ python eval_ddpm.py ^
 class EvalConfig:
     # ConditionalDDPM Config
     model_path: str = "ConditionalDDPM.nemo"
-    batch_size: int = 32
+    batch_size: int = 64
     image_size: int = -1
     label_id: Optional[int] = 0
 
@@ -31,9 +32,10 @@ class EvalConfig:
     ddim_eta: float = 0.0  # 0 = DDIM mode, 1 = DDPM mode
     ddim_timesteps: int = 100  # DDIM requires much smaller number of steps than DDPM; -1 uses original timesteps
 
+    # Output Config
     output_dir: str = "samples"
     add_timestamp: bool = True
-    save_grid: bool = True
+    grid_plot: bool = True
 
     # animation settings
     show_diffusion: bool = False
@@ -67,7 +69,7 @@ def main(cfg: EvalConfig):
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
 
     model = ConditionalDDPM.restore_from(cfg.model_path)  # type: ConditionalDDPM
-    model = model.eval()
+    model.eval()
 
     if cfg.image_size < 0:
         cfg.image_size = model.image_size
@@ -93,6 +95,7 @@ def main(cfg: EvalConfig):
 
     results_folder.mkdir(exist_ok=True, parents=True)
 
+    images = []
     for result_idx in range(cfg.batch_size):
         if not cfg.show_diffusion:
             if cfg.use_ddim_sampler:
@@ -107,7 +110,11 @@ def main(cfg: EvalConfig):
 
             result_path = result_path + '.png'
             result = samples[-1][result_idx]
-            torchvision.utils.save_image(result, result_path)
+
+            if cfg.grid_plot:
+                images.append(result)
+            else:
+                torchvision.utils.save_image(result, result_path)
         else:
             import matplotlib.pyplot as plt
             import matplotlib.animation as animation
@@ -141,6 +148,22 @@ def main(cfg: EvalConfig):
             animate = animation.ArtistAnimation(fig, ims, repeat=False, interval=interval, blit=True, )
             animate.save(result_path, fps=cfg.fps)
             print()
+
+    if len(images) > 0 and cfg.grid_plot:
+        if cfg.use_ddim_sampler:
+            result_path = str(results_folder / f"sample_grid_ddim_timesteps_{cfg.ddim_timesteps}")
+        else:
+            result_path = str(results_folder / f"sample_grid")
+
+        if cfg.label_id is not None:
+            result_path = result_path + f'_class_{cfg.label_id}'
+        else:
+            result_path = result_path + f'_unconditional'
+
+        result_path = result_path + '.png'
+
+        n_rows = int(torch.tensor(len(images), dtype=torch.float32).sqrt().round())
+        torchvision.utils.save_image(images, result_path, nrow=n_rows)
 
 
 if __name__ == '__main__':
