@@ -33,15 +33,6 @@ class GaussianDiffusion(AbstractDiffusionProcess):
             'cosine',
         ], f"Invalid schedule `{schedule_name}` provided to sampler !"
 
-        if schedule_name == 'linear':
-            self.schedule_fn = linear_beta_schedule
-        elif schedule_name == 'quadratic':
-            self.schedule_fn = quadratic_beta_schedule
-        elif schedule_name == 'sigmoid':
-            self.schedule_fn = sigmoid_beta_schedule
-        elif schedule_name == 'cosine':
-            self.schedule_fn = cosine_beta_schedule
-
         assert objective in ['pred_noise', 'pred_x0']
         self.objective = objective
 
@@ -52,6 +43,16 @@ class GaussianDiffusion(AbstractDiffusionProcess):
 
     def compute_constants(self, timesteps):
         # define beta schedule
+        if self.schedule_name == 'linear':
+            self.schedule_fn = linear_beta_schedule
+        elif self.schedule_name == 'quadratic':
+            self.schedule_fn = quadratic_beta_schedule
+        elif self.schedule_name == 'sigmoid':
+            self.schedule_fn = sigmoid_beta_schedule
+        elif self.schedule_name == 'cosine':
+            self.schedule_fn = cosine_beta_schedule
+
+        self.timesteps = timesteps
         scheduler_cfg = self.schedule_cfg.get(self.schedule_name, {})
 
         self.betas = self.schedule_fn(timesteps=timesteps, **scheduler_cfg)

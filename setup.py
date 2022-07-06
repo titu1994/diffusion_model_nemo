@@ -10,7 +10,7 @@ setup(
     # url='https://github.com/mypackage.git',
     author='Somshubra Majumdar',
     author_email='titu1994@gmail.com',
-    description='Port of HF DDPM implementation',
+    description='Port of several diffusion implementations',
     packages=find_packages(),
     install_requires=req,
 )

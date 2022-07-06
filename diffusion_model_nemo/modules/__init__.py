@@ -9,6 +9,7 @@ from diffusion_model_nemo.modules.diffusion_process import (
 from diffusion_model_nemo.modules.gaussian_diffusion import GaussianDiffusion
 from diffusion_model_nemo.modules.learned_gaussian_diffusion import LearnedGaussianDiffusion
 from diffusion_model_nemo.modules.generalized_gaussian_diffusion import GeneralizedGaussianDiffusion
+from diffusion_model_nemo.modules.wavegrad_diffusion import WaveGradDiffusion
 
 # SDE Score
 from diffusion_model_nemo.modules.sde_lib import SDE, VPSDE, VESDE, subVPSDE, LikelihoodEstimate
