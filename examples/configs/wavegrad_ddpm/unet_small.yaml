@@ -1,0 +1,122 @@
+name: "Wavegrad-DDPM-UNet"
+
+model:
+  image_size: ???
+  timesteps: 1000
+  channels: 3
+  num_classes: null
+
+  save_every: 1000  # save images every this many steps
+  compute_bpd: true  # compute bits per dimension (quite slow, so increase save_every above to reduce the cost)
+
+  train_ds:
+    name: null
+    split: null
+    cache_dir: null
+    # dataloader params
+    batch_size: 128 # you may increase batch_size if your memory allows
+    shuffle: true
+    num_workers: 4
+    pin_memory: true
+
+  diffusion_model:
+    _target_: diffusion_model_nemo.modules.WaveGradUNet
+    input_dim: ${model.image_size}
+    dim: 32
+    channels: ${model.channels}  # input number of channels (3 for RGB)
+    num_classes: ${model.num_classes}  # number of classes to condition on
+
+    # Additional arguments
+    dim_mults: [1, 2, 4, 8]
+    with_time_emb: False
+    resnet_block_order: 'bn_act_conv'  # can be bn_act_conv or conv_bn_relu
+    resnet_block_groups: 8
+    use_convnext: False
+    convnext_mult: 2
+    out_dim: null
+
+    # regularization
+    dropout: 0.0
+
+  sampler:
+    _target_: diffusion_model_nemo.modules.WaveGradDiffusion
+    timesteps: ${model.timesteps}
+    schedule_name: "linear"  # can be linear, quadratic, cosine, sigmoid
+    schedule_cfg:
+      cosine:
+        s: 0.008
+        min_clip: 0.0001
+        max_clip: 0.999
+      linear:
+        beta_start: 0.000001
+        beta_end: 0.01
+      quadratic:
+        beta_start: 0.000001
+        beta_end: 0.01
+      sigmoid:
+        beta_start: 0.000001
+        beta_end: 0.01
+
+  loss:
+    _target_: diffusion_model_nemo.loss.DiffusionLoss
+    loss_type: "l2"  # can be 'l1', 'l2', or 'huber'
+    reduction: "mean"  # can be 'mean', 'sum', 'batch_mean' or 'none'
+
+  optim:
+    name: adamw
+    lr: 0.001
+    # optimizer arguments
+    betas: [0.9, 0.98]
+    weight_decay: 0.001
+
+    # scheduler setup
+    sched:
+      name: CosineAnnealing
+      # scheduler config override
+      warmup_steps: null
+      warmup_ratio: null
+      min_lr: 1e-4
+
+trainer:
+  devices: -1 # number of GPUs, -1 would use all available GPUs
+  num_nodes: 1
+  max_epochs: 10
+  max_steps: null # computed at runtime if not set
+  limit_val_batches: 0 # Set to 0.25 to check 4 times per epoch, or an int for number of iterations
+  limit_test_batches: 0
+  accelerator: auto
+  strategy: ddp
+  accumulate_grad_batches: 1
+  gradient_clip_val: 1.0
+  precision: 32 # Should be set to 16 for O1 and O2 to enable the AMP.
+  log_every_n_steps: 10  # Interval of logging.
+  resume_from_checkpoint: null # The path to a checkpoint file to continue the training, restores the whole state including the epoch, step, LR schedulers, apex, etc.
+  num_sanity_val_steps: 0 # number of steps to perform validation steps for sanity check the validation process before starting the training, setting to 0 disables it
+  # check_val_every_n_epoch: 0 # number of evaluations on validation every n epochs
+  sync_batchnorm: true
+  enable_checkpointing: False  # Provided by exp_manager
+  logger: false  # Provided by exp_manager
+  benchmark: false # needs to be false for models with variable-length speech input as it slows down training
+
+exp_manager:
+  exp_dir: null
+  name: ${name}
+  create_tensorboard_logger: true
+  create_checkpoint_callback: true
+  checkpoint_callback_params:
+    # in case of multiple validation sets, first one is used
+    monitor: "train_loss"
+    mode: "min"
+    save_top_k: 1
+    always_save_nemo: True # saves the checkpoints as nemo files instead of PTL checkpoints
+
+  # you need to set these two to True to continue the training
+  resume_if_exists: false
+  resume_ignore_no_checkpoint: false
+
+  # You may use this section to create a W&B logger
+  create_wandb_logger: false
+  wandb_logger_kwargs:
+    name: null
+    project: null
+    entity: null

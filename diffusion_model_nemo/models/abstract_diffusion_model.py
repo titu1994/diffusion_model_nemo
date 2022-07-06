@@ -133,7 +133,7 @@ class AbstractDiffusionModel(ModelPT):
     def calculate_bits_per_dimension(self, x_start: torch.Tensor, diffusion_model_fn, max_batch_size: int = 32):
         # Implemented from https://github.com/hojonathanho/diffusion/blob/1e0dceb3b3495bbe19116a5e1b3596cd0706c543/diffusion_tf/diffusion_utils_2.py#L313
         B, C, H, W = x_start.size()
-        T = self.timesteps
+        T = self.sampler.timesteps
 
         if max_batch_size > 0:
             B = min(max_batch_size, B)

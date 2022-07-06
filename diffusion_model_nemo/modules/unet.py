@@ -6,14 +6,14 @@ from typing import Optional, Dict, List
 from nemo.core import NeuralModule, typecheck
 from nemo.core.neural_types import NeuralType
 
-from diffusion_model_nemo.parts import convnext, mha, positional_encoding
+from diffusion_model_nemo.parts import convnext, mha, positional_encoding, film
 from diffusion_model_nemo import utils
 
 
 class Unet(NeuralModule):
     def __init__(
         self,
-        input_dim: int,
+        input_dim: None,
         dim: int,
         out_dim: Optional[int] = None,
         dim_mults: Optional[List[int]] = None,
@@ -43,6 +43,10 @@ class Unet(NeuralModule):
 
         dims = [dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))
+
+        # cache dims
+        self.dim_list = dims
+        self.in_out_list = in_out
 
         if use_convnext:
             block_klass = partial(convnext.ConvNextBlock, mult=convnext_mult, dropout=dropout)
@@ -162,3 +166,101 @@ class Unet(NeuralModule):
             x = upsample(x)
 
         return self.final_conv(x)
+
+
+class WaveGradUNet(Unet):
+    def __init__(
+        self,
+        input_dim: int,
+        dim: int,
+        out_dim: Optional[int] = None,
+        dim_mults: Optional[List[int]] = None,
+        channels: int = 3,
+        with_time_emb: bool = None,  # ignored
+        resnet_block_groups: int = 8,
+        use_convnext: bool = True,
+        convnext_mult: int = 2,
+        resnet_block_order: str = 'bn_act_conv',
+        dropout: Optional[float] = None,
+        learned_variance: bool = False,
+        num_classes: Optional[int] = None,
+    ):
+        super(WaveGradUNet, self).__init__(
+            input_dim=input_dim,
+            dim=dim,
+            out_dim=out_dim,
+            dim_mults=dim_mults,
+            channels=channels,
+            with_time_emb=False,
+            resnet_block_groups=resnet_block_groups,
+            use_convnext=use_convnext,
+            convnext_mult=convnext_mult,
+            resnet_block_order=resnet_block_order,
+            dropout=dropout,
+            learned_variance=learned_variance,
+            num_classes=num_classes,
+        )
+
+        films = [film.FeatureWiseLinearModulation(dim, dim)]
+        films.extend([film.FeatureWiseLinearModulation(out_ch, out_ch) for (in_ch, out_ch) in self.in_out_list])
+        films.extend(
+            film.FeatureWiseLinearModulation(out_ch, out_ch) for (in_ch, out_ch) in reversed(self.in_out_list[1:])
+        )
+
+        self.films = nn.ModuleList(films)
+
+    def forward(self, x, noise_level, classes=None):
+        statistics = []
+        x = self.init_conv(x)
+        scale, shift = self.films[0](x, noise_level)
+        statistics.append([scale, shift])
+
+        if self.num_classes is not None:
+            if classes is None:
+                # Use a vector of zeros for classes
+                classes = torch.ones(x.size(0), dtype=torch.long, device=x.device) * self.num_classes
+
+            cls_embed = self.class_embed(classes)
+            cls_embed = cls_embed.view(x.size(0), x.size(1), 1, 1)
+            x = x + cls_embed
+
+        h = []
+
+        # downsample
+        film_idx = 1
+        for block1, block2, attn, downsample in self.downs:
+            x = block1(x, None)
+            x = block2(x, None)
+            x = attn(x)
+            h.append(x)
+
+            scale, shift = self.films[film_idx](x, noise_level)
+            x = downsample(x)
+
+            statistics.append([scale, shift])
+            film_idx += 1
+
+        # bottleneck
+        x = self.mid_block1(x, None)
+        x = self.mid_attn(x)
+        x = self.mid_block2(x, None)
+
+        # reverse list of statistics
+        scale, shift = statistics.pop()
+
+        # upsample
+        for block1, block2, attn, upsample in self.ups:
+            scale, shift = statistics.pop()
+
+            x = torch.cat((x, h.pop()), dim=1)
+            x = block1(x, None)
+            x = block2(x, None)
+            x = attn(x)
+            x = upsample(x)
+
+            x = x * scale + shift
+
+        scale, shift = statistics.pop()
+        x = scale * x + shift
+        out = self.final_conv(x)
+        return out

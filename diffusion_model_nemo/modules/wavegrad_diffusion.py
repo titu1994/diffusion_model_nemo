@@ -34,29 +34,32 @@ class WaveGradDiffusion(GaussianDiffusion):
 
         alphas_cumprod_prev_with_last = F.pad(self.alphas_cumprod, (1, 0), value=1.0)
         self.sqrt_alphas_cumprod_prev = torch.sqrt(alphas_cumprod_prev_with_last)
-        self.sqrt_alphas_cumprod_m1 = (1. - self.alphas_cumprod).sqrt() * self.sqrt_recip_alphas_cumprod
+        self.sqrt_alphas_cumprod_m1 = (1.0 - self.alphas_cumprod).sqrt() * self.sqrt_recip_alphas_cumprod
 
     def sample_continuous_noise_level(self, batch_size: int, device: torch.device):
         """
         Samples continuous noise level sqrt(alpha_cumprod).
         This is what makes WaveGrad different from other Denoising Diffusion Probabilistic Models.
         """
-        s = torch.randint(1, self.timesteps + 1, size=batch_size)
+        s = np.random.randint(1, self.timesteps + 1, size=batch_size)
         continuous_sqrt_alpha_cumprod = torch.tensor(
-            np.random.uniform(
-                self.sqrt_alphas_cumprod_prev[s - 1],
-                self.sqrt_alphas_cumprod_prev[s],
-                size=batch_size
-            )
+            np.random.uniform(self.sqrt_alphas_cumprod_prev[s - 1], self.sqrt_alphas_cumprod_prev[s], size=batch_size),
+            dtype=torch.float32,
         ).to(device)
-        return continuous_sqrt_alpha_cumprod.unsqueeze(-1)
+        return continuous_sqrt_alpha_cumprod.view(-1, 1, 1, 1)
 
     def q_sample(self, x_start: torch.Tensor, continuous_sqrt_alpha_cumprod: torch.Tensor, noise: torch.Tensor = None):
+
+        continuous_sqrt_alpha_cumprod_t = (
+            self.sample_continuous_noise_level(x_start.size(0), device=x_start.device).to(x_start)
+            if noise is None
+            else continuous_sqrt_alpha_cumprod
+        )
+
         if noise is None:
             noise = torch.randn_like(x_start)
 
-        continuous_sqrt_alpha_cumprod_t = self.sample_continuous_noise_level(x_start.size(0), device=x_start.device)
-        sqrt_one_minus_alphas_cumprod_t = (1. - continuous_sqrt_alpha_cumprod_t ** 2).sqrt()
+        sqrt_one_minus_alphas_cumprod_t = (1.0 - continuous_sqrt_alpha_cumprod_t ** 2).sqrt()
 
         return continuous_sqrt_alpha_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
 
@@ -66,7 +69,9 @@ class WaveGradDiffusion(GaussianDiffusion):
         Is needed to reconstruct the reverse (denoising)
         process posterior q(y_{t-1}|y_0, y_t, x).
         """
-        return self.sqrt_recip_alphas_cumprod[t] * x_t - self.sqrt_alphas_cumprod_m1[t] * noise
+        sqrt_recip_alphas_cumprod = self.extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape)
+        sqrt_alphas_cumprod_m1 = self.extract(self.sqrt_alphas_cumprod_m1, t, noise.shape)
+        return sqrt_recip_alphas_cumprod * x_t - sqrt_alphas_cumprod_m1 * noise
 
     def p_mean_variance(
         self,
@@ -76,8 +81,7 @@ class WaveGradDiffusion(GaussianDiffusion):
         model_output: torch.Tensor = None,
         return_pred_x_start: bool = False,
     ):
-        batch_size = x.size(0)
-        noise_level = torch.tensor([self.sqrt_alphas_cumprod_prev[t + 1]]).repeat(batch_size, 1).to(x)
+        noise_level = self.extract(self.sqrt_alphas_cumprod_prev, t + 1, x.shape)
         model_output = utils.default(model_output, lambda: model(x, noise_level))
 
         if self.objective == 'pred_noise':
