@@ -2,6 +2,7 @@ import torch
 from abc import ABC, abstractmethod
 
 from typing import Optional, List
+from dataclasses import dataclass
 
 
 def cosine_beta_schedule(timesteps, s=0.008, min_clip=0.0001, max_clip=0.999):
@@ -88,3 +89,28 @@ class AbstractDiffusionProcess(ABC, torch.nn.Module):
     def forward(self, *args, **kwargs):
         raise RuntimeWarning(f"{self.__class__.__name__} should not be used with forward(), please explicitly call "
                              f"the methods of this module.")
+
+
+@dataclass
+class CosineSchedule:
+    s: float = 0.008
+    min_clip: float = 0.0001
+    max_clip: float = 0.999
+
+
+@dataclass
+class LinearSchedule:
+    beta_start: float = 0.0001
+    beta_end: float = 0.02
+
+
+@dataclass
+class QuadraticSchedule:
+    beta_start: float = 0.0001
+    beta_end: float = 0.02
+
+
+@dataclass
+class SigmoidSchedule:
+    beta_start: float = 0.0001
+    beta_end: float = 0.02

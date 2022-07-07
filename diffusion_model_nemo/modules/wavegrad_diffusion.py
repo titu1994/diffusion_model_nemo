@@ -1,15 +1,15 @@
 from typing import Optional
-from typing import Optional
 
 import torch
 import numpy as np
 
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from torch.nn import functional as F
 from tqdm import tqdm
 
 from diffusion_model_nemo import utils
 from diffusion_model_nemo.modules import GaussianDiffusion
+from nemo.utils import logging
 
 
 # Ported from https://github.com/ivanvovk/WaveGrad/blob/master/model/diffusion_process.py
@@ -36,6 +36,30 @@ class WaveGradDiffusion(GaussianDiffusion):
         self.sqrt_alphas_cumprod_prev = torch.sqrt(alphas_cumprod_prev_with_last)
         self.sqrt_alphas_cumprod_m1 = (1.0 - self.alphas_cumprod).sqrt() * self.sqrt_recip_alphas_cumprod
 
+        self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
+        self.posterior_variance = torch.stack(
+            [self.posterior_variance, torch.tensor([1e-20] * self.timesteps, dtype=torch.float32)]
+        )
+        # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
+        self.posterior_log_variance_clipped = self.posterior_variance.max(dim=0).values.log()
+
+        logging.info(f"Changed time steps to {timesteps}")
+        logging.info(f"Last few samples of `sqrt_alphas_cumprod_prev` : {self.sqrt_alphas_cumprod_prev[-10:]}")
+
+    def change_noise_schedule(self, schedule_name: str = None, schedule_cfg: dict = None):
+        if schedule_name is None:
+            schedule_name = self.schedule_name
+
+        if schedule_cfg is None:
+            schedule_cfg = self.schedule_cfg
+
+        # Set values
+        self.schedule_name = schedule_name
+        self.schedule_cfg = schedule_cfg
+
+        logging.info(f"New scheduler name : {self.schedule_name}")
+        logging.info(f"New scheduler config : {OmegaConf.to_yaml(self.schedule_cfg)}")
+
     def sample_continuous_noise_level(self, batch_size: int, device: torch.device):
         """
         Samples continuous noise level sqrt(alpha_cumprod).
@@ -49,7 +73,6 @@ class WaveGradDiffusion(GaussianDiffusion):
         return continuous_sqrt_alpha_cumprod.view(-1, 1, 1, 1)
 
     def q_sample(self, x_start: torch.Tensor, continuous_sqrt_alpha_cumprod: torch.Tensor, noise: torch.Tensor = None):
-
         continuous_sqrt_alpha_cumprod_t = (
             self.sample_continuous_noise_level(x_start.size(0), device=x_start.device).to(x_start)
             if noise is None
@@ -82,7 +105,7 @@ class WaveGradDiffusion(GaussianDiffusion):
         return_pred_x_start: bool = False,
     ):
         noise_level = self.extract(self.sqrt_alphas_cumprod_prev, t + 1, x.shape)
-        model_output = utils.default(model_output, lambda: model(x, noise_level))
+        model_output = model(x, noise_level)
 
         if self.objective == 'pred_noise':
             x_recon = self.predict_start_from_noise(x_t=x, t=t, noise=model_output)
