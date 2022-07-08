@@ -45,7 +45,9 @@ class EvalConfig:
     # Schedule config
     override_schedule: bool = True
     search_schedule_iters: int = 1000  # set to 0 to disable searching of schedule
-    schedule: ScheduleConfig = ScheduleConfig()  # used only for manual selection of schedule; recommended to use automatic search
+    schedule: ScheduleConfig = (
+        ScheduleConfig()
+    )  # used only for manual selection of schedule; recommended to use automatic search
 
     # Output config
     output_dir: str = "samples"
