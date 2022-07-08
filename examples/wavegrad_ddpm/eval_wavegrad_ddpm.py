@@ -23,7 +23,7 @@ python eval_ddpm.py ^
 @dataclass
 class Schedules:
     cosine: DP.CosineSchedule = DP.CosineSchedule()
-    linear: DP.LinearSchedule = DP.LinearSchedule(beta_start=1e-6, beta_end=0.9)
+    linear: DP.LinearSchedule = DP.LinearSchedule(beta_start=1e-6, beta_end=0.01)
     quadratic: DP.QuadraticSchedule = DP.QuadraticSchedule(beta_start=1e-6, beta_end=0.01)
     sigmoid: DP.SigmoidSchedule = DP.SigmoidSchedule(beta_start=1e-6, beta_end=0.01)
 
@@ -40,11 +40,12 @@ class EvalConfig:
     model_path: str = "WaveGrad-DDPM.nemo"
     batch_size: int = 32
     image_size: int = -1
-    timesteps: int = 5
+    timesteps: int = 10
 
     # Schedule config
     override_schedule: bool = True
-    schedule: ScheduleConfig = ScheduleConfig()
+    search_schedule_iters: int = 1000  # set to 0 to disable searching of schedule
+    schedule: ScheduleConfig = ScheduleConfig()  # used only for manual selection of schedule; recommended to use automatic search
 
     # Output config
     output_dir: str = "samples"
@@ -64,10 +65,18 @@ def maybe_change_sampler_schedule(model: WavegradDDPM, cfg: EvalConfig):
 
     # Check if user wants DDIM sampling
     if cfg.override_schedule:
-        # Change sampler
-        model.sampler.change_noise_schedule(
-            schedule_name=cfg.schedule.schedule_name, schedule_cfg=cfg.schedule.schedule_cfg
-        )
+        if cfg.search_schedule_iters > 0:
+            # Change sampler via search
+            model.sampler.search_noise_schedule_coefficients(
+                timesteps=cfg.timesteps, iters=cfg.search_schedule_iters, seed=cfg.seed
+            )
+            model.sampler.change_noise_schedule()
+
+        else:
+            # Change sampler manually
+            model.sampler.change_noise_schedule(
+                schedule_name=cfg.schedule.schedule_name, schedule_cfg=cfg.schedule.schedule_cfg
+            )
 
     if cfg.timesteps > 0:
         model.sampler.compute_constants(cfg.timesteps)
@@ -136,7 +145,7 @@ def main(cfg: EvalConfig):
                 ttl = plt.text(
                     0.5,
                     1.01,
-                    f"T = {i + 1:4d} / {model.timesteps}",
+                    f"T = {i + 1:4d} / {model.sampler.timesteps}",
                     horizontalalignment='center',
                     verticalalignment='bottom',
                     transform=ax.transAxes,
@@ -149,7 +158,7 @@ def main(cfg: EvalConfig):
                 ims.append([im, ttl])
 
             print(f"Creating animation for {str(result_path)}")
-            interval = max(1, round(10000.0 / model.timesteps))
+            interval = max(1, round(10000.0 / model.sampler.timesteps))
             # repeat_delay=5000
             animate = animation.ArtistAnimation(
                 fig,

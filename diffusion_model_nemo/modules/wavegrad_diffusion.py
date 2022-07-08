@@ -2,6 +2,7 @@ from typing import Optional
 
 import torch
 import numpy as np
+import copy
 
 from omegaconf import DictConfig, OmegaConf
 from torch.nn import functional as F
@@ -29,23 +30,6 @@ class WaveGradDiffusion(GaussianDiffusion):
         # Recompute for all subclasses
         self.compute_constants(self.timesteps)
 
-    def compute_constants(self, timesteps):
-        super().compute_constants(timesteps)
-
-        alphas_cumprod_prev_with_last = F.pad(self.alphas_cumprod, (1, 0), value=1.0)
-        self.sqrt_alphas_cumprod_prev = torch.sqrt(alphas_cumprod_prev_with_last)
-        self.sqrt_alphas_cumprod_m1 = (1.0 - self.alphas_cumprod).sqrt() * self.sqrt_recip_alphas_cumprod
-
-        self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
-        self.posterior_variance = torch.stack(
-            [self.posterior_variance, torch.tensor([1e-20] * self.timesteps, dtype=torch.float32)]
-        )
-        # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
-        self.posterior_log_variance_clipped = self.posterior_variance.max(dim=0).values.log()
-
-        logging.info(f"Changed time steps to {timesteps}")
-        logging.info(f"Last few samples of `sqrt_alphas_cumprod_prev` : {self.sqrt_alphas_cumprod_prev[-10:]}")
-
     def change_noise_schedule(self, schedule_name: str = None, schedule_cfg: dict = None):
         if schedule_name is None:
             schedule_name = self.schedule_name
@@ -59,6 +43,67 @@ class WaveGradDiffusion(GaussianDiffusion):
 
         logging.info(f"New scheduler name : {self.schedule_name}")
         logging.info(f"New scheduler config : {OmegaConf.to_yaml(self.schedule_cfg)}")
+
+    def search_noise_schedule_coefficients(self, timesteps, iters: int = 100, seed: Optional[int] = None):
+        # reset timesteps
+        self.compute_constants(self.original_timesteps)
+        original_sqrt_alphas_cumprod_prev_last = self.sqrt_alphas_cumprod_prev[-1]
+
+        if self.schedule_name == 'cosine':
+            beta_end_key = 'max_clip'
+        elif self.schedule_name in ['linear', 'quadratic', 'sigmoid']:
+            beta_end_key = 'beta_end'
+        else:
+            raise ValueError("Unknown schedule name !")
+
+        # Run stochastic bayesian search
+        previous_beta_end = self.schedule_cfg[self.schedule_name][beta_end_key]
+        previous_mae = 1e10
+
+        rng = np.random.RandomState(seed)
+
+        for _ in range(iters):
+            # sample a beta end value
+            sampled_beta_end = rng.uniform(0.0, 1.0)
+            # update beta end value
+            self.schedule_cfg[self.schedule_name][beta_end_key] = sampled_beta_end
+            # compute new statistics
+            self.compute_constants(timesteps, verbose=False)
+            # extract new sqrt_alphas_cumprod_prev last value
+            new_sqrt_alphas_cumprod_prev_last = self.sqrt_alphas_cumprod_prev[-1]
+            # compute error
+            mae = np.abs(original_sqrt_alphas_cumprod_prev_last - new_sqrt_alphas_cumprod_prev_last)
+            if mae < previous_mae:
+                logging.info(
+                    f"Searching coefficient: Found new beta2 coefficient {sampled_beta_end} "
+                    f"(error: {mae} < {previous_mae})"
+                )
+
+                previous_mae = mae
+                previous_beta_end = sampled_beta_end
+
+        # Update value of schedule
+        self.schedule_cfg[self.schedule_name][beta_end_key] = previous_beta_end
+
+        logging.info(f"Searching coefficeint: Final beta2 = {self.schedule_cfg[self.schedule_name][beta_end_key]}")
+
+    def compute_constants(self, timesteps, verbose: bool = True):
+        super().compute_constants(timesteps)
+
+        alphas_cumprod_prev_with_last = F.pad(self.alphas_cumprod, (1, 0), value=1.0)
+        self.sqrt_alphas_cumprod_prev = torch.sqrt(alphas_cumprod_prev_with_last)
+        self.sqrt_alphas_cumprod_m1 = (1.0 - self.alphas_cumprod).sqrt() * self.sqrt_recip_alphas_cumprod
+
+        self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
+        self.posterior_variance = torch.stack(
+            [self.posterior_variance, torch.tensor([1e-20] * self.timesteps, dtype=torch.float32)]
+        )
+        # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
+        self.posterior_log_variance_clipped = self.posterior_variance.max(dim=0).values.log()
+
+        if verbose:
+            logging.info(f"Changed time steps to {timesteps}")
+            logging.info(f"Last few samples of `sqrt_alphas_cumprod_prev` : {self.sqrt_alphas_cumprod_prev[-10:]}")
 
     def sample_continuous_noise_level(self, batch_size: int, device: torch.device):
         """
