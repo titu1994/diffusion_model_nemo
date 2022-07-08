@@ -26,11 +26,19 @@ class WaveGradDiffusion(GaussianDiffusion):
             timesteps=timesteps, schedule_name=schedule_name, schedule_cfg=schedule_cfg, objective=objective
         )
         self.original_timesteps = timesteps
+        self.original_schedule_name = schedule_name
+        self.original_schedule_cfg = copy.deepcopy(schedule_cfg)
 
         # Recompute for all subclasses
         self.compute_constants(self.timesteps)
 
-    def change_noise_schedule(self, schedule_name: str = None, schedule_cfg: dict = None):
+    def change_noise_schedule(
+        self, schedule_name: str = None, schedule_cfg: dict = None, reset_cfg: bool = False, verbose: bool = True
+    ):
+        if reset_cfg:
+            self.schedule_name = self.original_schedule_name
+            self.schedule_cfg = copy.deepcopy(self.original_schedule_cfg)
+
         if schedule_name is None:
             schedule_name = self.schedule_name
 
@@ -41,12 +49,15 @@ class WaveGradDiffusion(GaussianDiffusion):
         self.schedule_name = schedule_name
         self.schedule_cfg = schedule_cfg
 
-        logging.info(f"New scheduler name : {self.schedule_name}")
-        logging.info(f"New scheduler config : {OmegaConf.to_yaml(self.schedule_cfg)}")
+        if verbose:
+            logging.info(f"New scheduler name : \n{self.schedule_name}")
+            logging.info(f"New scheduler config : {OmegaConf.to_yaml(self.schedule_cfg)}")
 
-    def search_noise_schedule_coefficients(self, timesteps, iters: int = 100, seed: Optional[int] = None):
+    def search_noise_schedule_coefficients(
+        self, timesteps, iters: int = 100, seed: Optional[int] = None, verbose: bool = True
+    ):
         # reset timesteps
-        self.compute_constants(self.original_timesteps)
+        self.compute_constants(self.original_timesteps, verbose=verbose)
         original_sqrt_alphas_cumprod_prev_last = self.sqrt_alphas_cumprod_prev[-1]
 
         if self.schedule_name == 'cosine':
@@ -94,12 +105,12 @@ class WaveGradDiffusion(GaussianDiffusion):
         self.sqrt_alphas_cumprod_prev = torch.sqrt(alphas_cumprod_prev_with_last)
         self.sqrt_alphas_cumprod_m1 = (1.0 - self.alphas_cumprod).sqrt() * self.sqrt_recip_alphas_cumprod
 
-        self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
-        self.posterior_variance = torch.stack(
-            [self.posterior_variance, torch.tensor([1e-20] * self.timesteps, dtype=torch.float32)]
-        )
+        # self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
+        # self.posterior_variance = torch.stack(
+        #     [self.posterior_variance, torch.tensor([1e-20] * self.timesteps, dtype=torch.float32)]
+        # )
         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
-        self.posterior_log_variance_clipped = self.posterior_variance.max(dim=0).values.log()
+        # self.posterior_log_variance_clipped = self.posterior_variance.max(dim=0).values.log()
 
         if verbose:
             logging.info(f"Changed time steps to {timesteps}")
@@ -117,7 +128,12 @@ class WaveGradDiffusion(GaussianDiffusion):
         ).to(device)
         return continuous_sqrt_alpha_cumprod.view(-1, 1, 1, 1)
 
-    def q_sample(self, x_start: torch.Tensor, continuous_sqrt_alpha_cumprod: torch.Tensor, noise: torch.Tensor = None):
+    def q_sample(
+        self,
+        x_start: torch.Tensor,
+        continuous_sqrt_alpha_cumprod: torch.Tensor = None,
+        noise: torch.Tensor = None,
+    ):
         continuous_sqrt_alpha_cumprod_t = (
             self.sample_continuous_noise_level(x_start.size(0), device=x_start.device).to(x_start)
             if noise is None
