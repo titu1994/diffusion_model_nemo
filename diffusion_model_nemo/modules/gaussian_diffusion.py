@@ -102,6 +102,11 @@ class GaussianDiffusion(AbstractDiffusionProcess):
 
     # forward diffusion (using the nice property)
     def q_sample(self, x_start: torch.Tensor, t: torch.Tensor, noise: torch.Tensor = None):
+        """
+        Efficiently computes diffusion version y_t from y_0 using a closed form expression:
+            y_t = sqrt(alpha_cumprod)_t * y_0 + sqrt(1 - alpha_cumprod_t) * eps,
+            where eps is sampled from a standard Gaussian.
+        """
         if noise is None:
             noise = torch.randn_like(x_start)
 
@@ -125,6 +130,10 @@ class GaussianDiffusion(AbstractDiffusionProcess):
         model_output: torch.Tensor = None,
         return_pred_x_start: bool = False,
     ):
+        """
+        Computes Gaussian transitions of Markov chain at step t
+        for further computation of y_{t-1} given current state y_t and features.
+        """
         model_output = utils.default(model_output, lambda: model(x, t))
 
         if self.objective == 'pred_noise':

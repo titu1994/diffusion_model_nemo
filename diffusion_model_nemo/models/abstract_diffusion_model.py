@@ -47,6 +47,10 @@ class AbstractDiffusionModel(ModelPT):
     def forward(self, batch_size, image_size):
         raise NotImplementedError()
 
+    def get_diffusion_model(self, batch: Dict):
+        diffusion_model_fn = self.forward
+        return diffusion_model_fn
+
     def validation_step(self, batch, batch_nb):
         return None
 
@@ -182,7 +186,6 @@ class AbstractDiffusionModel(ModelPT):
 
             # Compute total bpd
             total_bpd_b = torch.sum(terms_buffer, dim=1) + prior_bpd_b
-
 
         # assert terms_buffer.shape == mse_buffer.shape == [B, T] and total_bpd_b.shape == prior_bpd_b.shape == [B]
         result = {

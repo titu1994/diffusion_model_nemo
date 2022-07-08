@@ -103,13 +103,13 @@ class WaveGradDiffusion(GaussianDiffusion):
 
         alphas_cumprod_prev_with_last = F.pad(self.alphas_cumprod, (1, 0), value=1.0)
         self.sqrt_alphas_cumprod_prev = torch.sqrt(alphas_cumprod_prev_with_last)
-        self.sqrt_alphas_cumprod_m1 = (1.0 - self.alphas_cumprod).sqrt() * self.sqrt_recip_alphas_cumprod
+        self.sqrt_alphas_cumprod_m1 = torch.sqrt(1.0 - self.alphas_cumprod) * self.sqrt_recip_alphas_cumprod
 
         # self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         # self.posterior_variance = torch.stack(
         #     [self.posterior_variance, torch.tensor([1e-20] * self.timesteps, dtype=torch.float32)]
         # )
-        # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
+        # # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
         # self.posterior_log_variance_clipped = self.posterior_variance.max(dim=0).values.log()
 
         if verbose:
@@ -163,9 +163,12 @@ class WaveGradDiffusion(GaussianDiffusion):
         x: torch.Tensor,
         t: torch.Tensor,
         model_output: torch.Tensor = None,
+        noise_level: torch.Tensor = None,
         return_pred_x_start: bool = False,
     ):
-        noise_level = self.extract(self.sqrt_alphas_cumprod_prev, t + 1, x.shape)
+        if noise_level is None:
+            noise_level = self.extract(self.sqrt_alphas_cumprod_prev, t + 1, x.shape)
+
         model_output = model(x, noise_level)
 
         if self.objective == 'pred_noise':

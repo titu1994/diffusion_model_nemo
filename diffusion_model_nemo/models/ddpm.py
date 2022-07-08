@@ -40,10 +40,6 @@ class DDPM(AbstractDiffusionModel):
     def forward(self, x_t: torch.Tensor, t: torch.Tensor, classes: torch.Tensor = None):
         return self.diffusion_model(x_t, t)
 
-    def get_diffusion_model(self, batch: Dict):
-        diffusion_model_fn = self.forward
-        return diffusion_model_fn
-
     def training_step(self, batch, batch_nb):
         device = next(self.parameters()).device
         batch_size = batch["pixel_values"].shape[0]

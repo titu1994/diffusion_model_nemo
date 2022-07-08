@@ -67,20 +67,25 @@ class WavegradDDPM(DDPM):
         if self.trainer.global_step != 0 and self.trainer.global_step % self.save_and_sample_every == 0:
             self.eval()
             # Do faster inference
-            self.sampler.compute_constants(timesteps=50)
+            self.sampler.search_noise_schedule_coefficients(timesteps=50, iters=100, seed=0)
+            self.sampler.change_noise_schedule(verbose=False)
+            self.sampler.compute_constants(timesteps=50, verbose=False)
 
             self._save_image_step(batch_size=batch_size, step=self.trainer.global_step)
 
-            if self.cfg.get('compute_bpd', False):
-                log_dict = self.calculate_bits_per_dimension(x_start=samples, diffusion_model_fn=self.forward)
-                for key in log_dict.keys():
-                    log_dict[key] = log_dict[key].mean()
-
-                self.log('total_bits_per_dimension', log_dict.pop('total_bpd'), prog_bar=True)
-                self.log_dict(log_dict)
+            # if self.cfg.get('compute_bpd', False):
+            #     log_dict = self.calculate_bits_per_dimension(x_start=samples, diffusion_model_fn=self.forward)
+            #     for key in log_dict.keys():
+            #         log_dict[key] = log_dict[key].mean()
+            #
+            #     self.log('total_bits_per_dimension', log_dict.pop('total_bpd'), prog_bar=True)
+            #     self.log_dict(log_dict)
 
             # Return to train mode
-            self.sampler.compute_constants(timesteps=self.sampler.original_timesteps)
+            self.sampler.change_noise_schedule(reset_cfg=True, verbose=False)
+            self.sampler.compute_constants(timesteps=self.sampler.original_timesteps, verbose=False)
+
+            self.train()
 
         return loss
 
@@ -108,65 +113,73 @@ class WavegradDDPM(DDPM):
     def interpolate(self, x1: torch.Tensor, x2: torch.Tensor, t: Optional[int] = None, lambd: float = 0.5, **kwargs):
         raise NotImplementedError()
 
-    def calculate_bits_per_dimension(self, x_start: torch.Tensor, diffusion_model_fn, max_batch_size: int = 32):
-        # Implemented from https://github.com/hojonathanho/diffusion/blob/1e0dceb3b3495bbe19116a5e1b3596cd0706c543/diffusion_tf/diffusion_utils_2.py#L313
-        B, C, H, W = x_start.size()
-        T = self.sampler.timesteps
-
-        if max_batch_size > 0:
-            B = min(max_batch_size, B)
-
-        with torch.inference_mode():
-            x_start = x_start[:B]
-
-            terms_buffer = torch.zeros(B, T, device=x_start.device)
-            T_range = torch.arange(T, device=x_start.device).unsqueeze(0)
-            t_b = torch.full([B], fill_value=T, device=x_start.device, dtype=torch.long)
-            zero_tensor = torch.tensor(0.0, device=x_start.device)
-
-            for t in tqdm(range(T - 1, -1, -1), desc='Computing bits per dimension', total=T):
-                t_b = t_b * 0 + t
-
-                x_t = self.sampler.q_sample(x_start=x_start, continuous_sqrt_alpha_cumprod=None)
-                # calculating kl loss for calculating NLL in bits per dimension
-                true_mean, true_log_variance_clipped = self.sampler.q_posterior(x_start=x_start, x=x_t, t=t_b)
-                model_mean, _, model_log_variance, pred_x_start = self.sampler.p_mean_variance(
-                    diffusion_model_fn, x=x_t, t=t_b, return_pred_x_start=True,
-                )
-                if model_log_variance.shape != model_mean.shape:
-                    model_log_variance = model_log_variance.expand(-1, *model_mean.size()[1:])
-
-                # Calculate VLB term at the current timestep
-                new_vals_b = VariationalBoundLoss.compute_variation_loss_terms(
-                    samples=x_start,
-                    model_mean=model_mean,
-                    model_log_variance=model_log_variance,
-                    true_mean=true_mean,
-                    true_log_variance_clipped=true_log_variance_clipped,
-                    t=t_b,
-                )
-
-                # MSE for progressive prediction loss
-                mask_bt = ((t_b.unsqueeze(-1)) == (T_range)).to(torch.float32)
-                terms_buffer = terms_buffer * (1.0 - mask_bt) + new_vals_b.unsqueeze(-1) * mask_bt
-
-                assert mask_bt.shape == terms_buffer.shape == torch.Size([B, T])
-
-            # Compute prior
-            t_prior = torch.full([B], fill_value=T - 1, device=x_start.device, dtype=torch.long)
-            qt_mean, _, qt_log_variance = self.sampler.q_mean_variance(x_start=x_start, t=t_prior)
-            kl_prior = utils.normal_kl(mean1=qt_mean, logvar1=qt_log_variance, mean2=zero_tensor, logvar2=zero_tensor)
-            prior_bpd_b = utils.mean_flattened(kl_prior) / math.log(2.0)
-
-            # Compute total bpd
-            total_bpd_b = torch.sum(terms_buffer, dim=1) + prior_bpd_b
-
-
-        # assert terms_buffer.shape == mse_buffer.shape == [B, T] and total_bpd_b.shape == prior_bpd_b.shape == [B]
-        result = {
-            'total_bpd': total_bpd_b,
-            'terms_bpd': terms_buffer,
-            'prior_bpd': prior_bpd_b,
-        }
-
-        return result
+    # def calculate_bits_per_dimension(self, x_start: torch.Tensor, diffusion_model_fn, max_batch_size: int = 32):
+    #     # Implemented from https://github.com/hojonathanho/diffusion/blob/1e0dceb3b3495bbe19116a5e1b3596cd0706c543/diffusion_tf/diffusion_utils_2.py#L313
+    #     B, C, H, W = x_start.size()
+    #     T = self.sampler.timesteps
+    #
+    #     if max_batch_size > 0:
+    #         B = min(max_batch_size, B)
+    #
+    #     with torch.inference_mode():
+    #         x_start = x_start[:B]
+    #
+    #         terms_buffer = torch.zeros(B, T, device=x_start.device)
+    #         T_range = torch.arange(T, device=x_start.device).unsqueeze(0)
+    #         t_b = torch.full([B], fill_value=T, device=x_start.device, dtype=torch.long)
+    #         zero_tensor = torch.tensor(0.0, device=x_start.device)
+    #
+    #         for t in tqdm(range(T - 1, -1, -1), desc='Computing bits per dimension', total=T):
+    #             t_b = t_b * 0 + t
+    #
+    #             noise = torch.randn_like(x_start)
+    #             noise_level = self.sampler.extract(self.sampler.sqrt_alphas_cumprod_prev, t_b, noise.shape)
+    #
+    #             x_t = self.sampler.q_sample(x_start=x_start, continuous_sqrt_alpha_cumprod=noise_level, noise=noise)
+    #             # calculating kl loss for calculating NLL in bits per dimension
+    #             true_mean, true_log_variance_clipped = self.sampler.q_posterior(x_start=x_start, x=x_t, t=t_b)
+    #             model_mean, _, model_log_variance, pred_x_start = self.sampler.p_mean_variance(
+    #                 diffusion_model_fn, x=x_t, t=t_b, noise_level=noise_level, return_pred_x_start=True,
+    #             )
+    #             if model_log_variance.shape != model_mean.shape:
+    #                 model_log_variance = model_log_variance.expand(-1, *model_mean.size()[1:])
+    #
+    #             # print("xt", x_t.view(x_t.size(0), -1).mean(-1).cpu().numpy())
+    #             # print("true mean", true_mean.view(true_mean.size(0), -1).mean(-1).cpu().numpy())
+    #             # print("model mean", model_mean.view(model_mean.size(0), -1).mean(-1).cpu().numpy())
+    #             # print()
+    #
+    #             # Calculate VLB term at the current timestep
+    #             new_vals_b = VariationalBoundLoss.compute_variation_loss_terms(
+    #                 samples=x_start,
+    #                 model_mean=model_mean,
+    #                 model_log_variance=model_log_variance,
+    #                 true_mean=true_mean,
+    #                 true_log_variance_clipped=true_log_variance_clipped,
+    #                 t=t_b,
+    #             )
+    #
+    #             # MSE for progressive prediction loss
+    #             mask_bt = ((t_b.unsqueeze(-1)) == (T_range)).to(torch.float32)
+    #             terms_buffer = terms_buffer * (1.0 - mask_bt) + new_vals_b.unsqueeze(-1) * mask_bt
+    #
+    #             assert mask_bt.shape == terms_buffer.shape == torch.Size([B, T])
+    #
+    #         # Compute prior
+    #         t_prior = torch.full([B], fill_value=T - 1, device=x_start.device, dtype=torch.long)
+    #         qt_mean, _, qt_log_variance = self.sampler.q_mean_variance(x_start=x_start, t=t_prior)
+    #         kl_prior = utils.normal_kl(mean1=qt_mean, logvar1=qt_log_variance, mean2=zero_tensor, logvar2=zero_tensor)
+    #         prior_bpd_b = utils.mean_flattened(kl_prior) / math.log(2.0)
+    #
+    #         # Compute total bpd
+    #         total_bpd_b = torch.sum(terms_buffer, dim=1) + prior_bpd_b
+    #
+    #
+    #     # assert terms_buffer.shape == mse_buffer.shape == [B, T] and total_bpd_b.shape == prior_bpd_b.shape == [B]
+    #     result = {
+    #         'total_bpd': total_bpd_b,
+    #         'terms_bpd': terms_buffer,
+    #         'prior_bpd': prior_bpd_b,
+    #     }
+    #
+    #     return result
